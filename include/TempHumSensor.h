@@ -24,6 +24,9 @@ class TempHumSensor : public Sensor {
     }
 
     void readData() override {
+        value1 = bme.readTemperature();
+        value2 = bme.readHumidity();
+        value3 = bme.readPressure()/100;
         Serial.printf(
             "%s -> Temperatura: %.2f *C | Wilgotność: %.2f %% | Ciśnienie: "
             "%.2f hPa\n",
