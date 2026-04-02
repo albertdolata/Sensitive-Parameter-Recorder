@@ -2,8 +2,10 @@
 
 #include "AccelSensor.h"
 #include "TempHumSensor.h"
+#include "ContactSensor.h"
+#include "PresenceSensor.h"
 
-#define NUM_SENSORS 4
+#define NUM_SENSORS 6
 
 Sensor* sensors[NUM_SENSORS];
 
@@ -16,6 +18,8 @@ void setup() {
     sensors[1] = new AccelSensor("Paleta szkło", 1);
     sensors[2] = new AccelSensor("Paleta telewizory", 2);
     sensors[3] = new AccelSensor("Paleta piwo", 3);
+    sensors[4] = new ContactSensor("Kontaktron");
+    sensors[5] = new PresenceSensor("Czujnik obecności człowieka");
 
     for (int i = 0; i < NUM_SENSORS; i++) {
         sensors[i]->initialize();
