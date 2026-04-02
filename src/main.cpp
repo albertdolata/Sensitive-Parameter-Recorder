@@ -1,18 +1,26 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#include "AccelSensor.h"
+#include "TempHumSensor.h"
+
+Sensor* sensors[3];
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+    Serial.begin(115200);
+
+    sensors[0] = new TempHumSensor("bme280 Centrala Główna", 0x76);
+    sensors[1] = new AccelSensor("Paleta szkło", 1);
+    sensors[2] = new AccelSensor("Paleta telewizory", 2);
+    sensors[3] = new AccelSensor("Paleta piwo", 3);
+
+    for (int i = 0; i < 3; i++) {
+        sensors[i]->initialize();
+    }
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+    for (int i = 0; i < 3; i++) {
+        sensors[i]->readData();
+        delay(3000);
+    }
 }
