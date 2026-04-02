@@ -18,8 +18,8 @@ class AccelSensor : public Sensor {
     void readData() override {
         int shocklvl = random(0, 100);
         if (shocklvl > 50) {
-            Serial.printf("Paleta %s -> Zarejestrowano wstrząs o sile: %.2d \n",
-                          sensorName.c_str(), shocklvl);
+            Serial.printf("Paleta nr %d %s -> Zarejestrowano wstrząs o sile: %.2d \n",
+                          idPalete, sensorName.c_str(), shocklvl);
         } else {
             Serial.println("nie zarejestrowano gwałtownego wstrząsu");
         }
