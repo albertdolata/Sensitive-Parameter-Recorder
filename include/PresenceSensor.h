@@ -14,6 +14,7 @@ class PresenceSensor : public Sensor {
 
     void readData() override {
         isSomeOneHere = random(0, 2);
+        value1 = isSomeOneHere;
         if (isSomeOneHere)
             Serial.printf("UWAGA! %s wykrył, że ktoś jest w naczepie! \n",
                           sensorName.c_str());

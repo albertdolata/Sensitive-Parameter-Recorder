@@ -14,6 +14,7 @@ class ContactSensor : public Sensor {
 
     void readData() override {
         isDoorOpen = random(0, 2);
+        value1 = isDoorOpen;
         if (isDoorOpen)
             Serial.printf("UWAGA! %s wykrył, że drzwi są otwarte \n",
                           sensorName.c_str());
