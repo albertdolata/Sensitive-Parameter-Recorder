@@ -15,7 +15,7 @@ class CloudManager {
         WiFi.begin(ssid, password);
         while (WiFi.status() != WL_CONNECTED) {
             delay(500);
-            Serial.println(".");
+            Serial.print(".");
         }
         Serial.printf("Połączono z siecią  o ip: %s", WiFi.localIP().toString().c_str());
     }
