@@ -2,6 +2,7 @@
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <BLEUtils.h>
+#include <Sensor.h>
 
 struct __attribute__((packed)) PalletData {
     uint16_t company_id;
@@ -12,14 +13,21 @@ struct __attribute__((packed)) PalletData {
 
 class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
     private:
+    Sensor* sensorBLE;
     public:
+    BLESensorManager(Sensor* sensor) {
+        this->sensorBLE = sensor;
+    }
+
     void onResult(BLEAdvertisedDevice advertisedDevice) override {
         if (advertisedDevice.haveManufacturerData()) {
             std::string rawData = advertisedDevice.getManufacturerData();
             if (rawData.length() == sizeof(PalletData)) {
                 PalletData* incoming = (PalletData*)rawData.data();
                 if(incoming->company_id == 0XABCD){
-                    Serial.printf("T: %u, H: %u, S: %d", incoming->temp, incoming->humid, incoming->red_switch_stat);
+                    sensorBLE->value1 = incoming->temp;
+                    sensorBLE->value2 = incoming->humid;
+                    sensorBLE->value3 = incoming->red_switch_stat;
                 }
             }
         }
