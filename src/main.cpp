@@ -6,11 +6,15 @@
 #include "PresenceSensor.h"
 #include "CloudManager.h"
 #include "secrets.h"
+#include "BLESensor.h"
+#include "BLESensorManager.h"
 
-#define NUM_SENSORS 6
+#define NUM_SENSORS 7
 
 Sensor* sensors[NUM_SENSORS];
 CloudManager cloud;
+BLESensorManager* radarBLE;
+BLEScan* pBLEScan;
 
 volatile int serverRespone;
 
@@ -28,10 +32,15 @@ void setup() {
     sensors[3] = new AccelSensor("Paleta piwo", 3);
     sensors[4] = new ContactSensor("Kontaktron");
     sensors[5] = new PresenceSensor("Czujnik obecności człowieka");
+    sensors[6] = new BLESensor("NRF1");
 
     for (int i = 0; i < NUM_SENSORS; i++) {
         sensors[i]->initialize();
     }
+
+    BLEDevice::init("");
+    pBLEScan = BLEDevice::getScan();
+    radarBLE = new BLESensorManager(sensors[6]);
 }
 
 void loop() {
