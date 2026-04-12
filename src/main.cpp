@@ -41,9 +41,20 @@ void setup() {
     BLEDevice::init("");
     pBLEScan = BLEDevice::getScan();
     radarBLE = new BLESensorManager(sensors[6]);
+
+    pBLEScan->setAdvertisedDeviceCallbacks(radarBLE);
+    pBLEScan->setActiveScan(true);
+    pBLEScan->setInterval(100);
+    pBLEScan->setWindow(99);
 }
 
 void loop() {
+    Serial.println("\n ------- Nasłuch BLE -------");
+    pBLEScan->start(6, false);
+    pBLEScan->clearResults();
+
+
+
     Serial.println("\n ------- Odczyt z czujników -------");
     for (int i = 0; i < NUM_SENSORS; i++) {
         sensors[i]->readData();
