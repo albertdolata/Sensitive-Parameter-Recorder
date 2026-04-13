@@ -49,7 +49,29 @@ void setup() {
 
 void loop() {
     Serial.println("\n ------- Nasłuch BLE -------");
-    pBLEScan->start(6, false);
+    BLEScanResults foundDevices = pBLEScan->start(6, false);
+    Serial.printf("Znalezione urządzenia BLE: %d\n", foundDevices.getCount());
+   
+    //kodzik na to co znalazł ble
+    for (int i = 0; i < foundDevices.getCount(); i++) {
+        BLEAdvertisedDevice device = foundDevices.getDevice(i);
+        
+        Serial.printf(" [%d] MAC: %s ", i + 1, device.getAddress().toString().c_str());
+        
+        if (device.haveName()) {
+            Serial.printf("| Nazwa: %s ", device.getName().c_str());
+        }
+        
+        if (device.haveManufacturerData()) {
+            std::string raw = device.getManufacturerData();
+            Serial.printf("| Dlugosc danych: %d bajtow ", raw.length());
+        }
+        
+        Serial.println();
+    }
+    Serial.println(" --------------------------------");
+    // -----------------------------------------------------
+
     pBLEScan->clearResults();
 
     Serial.println("\n ------- Odczyt z czujników -------");

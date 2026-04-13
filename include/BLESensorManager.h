@@ -28,21 +28,25 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
                 PalletData* incoming = (PalletData*)rawData.data();
                 switch (incoming->company_id) {
                     case 0xA1B1:
+                        Serial.println("Dane z nRf o companyid \"0xA1B1\" zostały przyjęte");
                         sensorBLE1->value1 = incoming->temp;
                         sensorBLE1->value2 = incoming->humid;
                         sensorBLE1->value3 = incoming->red_switch_stat;
                         break;
                     case 0xA2B2:
+                        Serial.println("Dane z nRf o companyid \"0xA2B2\" zostały przyjęte");
                         sensorBLE2->value1 = incoming->temp;
                         sensorBLE2->value2 = incoming->humid;
                         sensorBLE2->value3 = incoming->red_switch_stat;
                         break;
                     case 0xA3B3:
+                        Serial.println("Dane z nRf o companyid \"0xA3B3\" zostały przyjęte");
                         sensorBLE3->value1 = incoming->temp;
                         sensorBLE3->value2 = incoming->humid;
                         sensorBLE3->value3 = incoming->red_switch_stat;
                         break;
                     default:
+                        Serial.printf("Znaleziono paczke o companyid: %X\n", incoming->company_id);
                         break;
                 }
             }
