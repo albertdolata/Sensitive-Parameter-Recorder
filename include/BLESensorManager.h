@@ -8,7 +8,8 @@ struct __attribute__((packed)) PalletData {
     uint16_t company_id;
     uint16_t temp;
     uint16_t humid;
-    bool red_switch_stat;
+    uint16_t shake;
+    uint16_t tilt;
 };
 
 class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
@@ -23,30 +24,33 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
 
     void onResult(BLEAdvertisedDevice advertisedDevice) override {
         if (advertisedDevice.haveManufacturerData()) {
-            std::string rawData = advertisedDevice.getManufacturerData();
-            if (rawData.length() == sizeof(PalletData)) {
-                PalletData* incoming = (PalletData*)rawData.data();
-                switch (incoming->company_id) {
+            std::string recivedData = advertisedDevice.getManufacturerData();
+            if (recivedData.length() == sizeof(PalletData)) {
+                PalletData* excpectedData = (PalletData*)recivedData.data();
+                switch (excpectedData->company_id) {
                     case 0xA1B1:
                         Serial.println("Dane z nRf o companyid \"0xA1B1\" zostały przyjęte");
-                        sensorBLE1->value1 = incoming->temp;
-                        sensorBLE1->value2 = incoming->humid;
-                        sensorBLE1->value3 = incoming->red_switch_stat;
+                        sensorBLE1->value1 = excpectedData->temp/10.0;
+                        sensorBLE1->value2 = excpectedData->humid;
+                        sensorBLE1->value3 = excpectedData->shake;
+                        sensorBLE1->value4 = excpectedData->tilt;
                         break;
                     case 0xA2B2:
                         Serial.println("Dane z nRf o companyid \"0xA2B2\" zostały przyjęte");
-                        sensorBLE2->value1 = incoming->temp;
-                        sensorBLE2->value2 = incoming->humid;
-                        sensorBLE2->value3 = incoming->red_switch_stat;
+                        sensorBLE2->value1 = excpectedData->temp/10.0;
+                        sensorBLE2->value2 = excpectedData->humid;
+                        sensorBLE2->value3 = excpectedData->shake;
+                        sensorBLE1->value4 = excpectedData->tilt;
                         break;
                     case 0xA3B3:
                         Serial.println("Dane z nRf o companyid \"0xA3B3\" zostały przyjęte");
-                        sensorBLE3->value1 = incoming->temp;
-                        sensorBLE3->value2 = incoming->humid;
-                        sensorBLE3->value3 = incoming->red_switch_stat;
+                        sensorBLE3->value1 = excpectedData->temp/10.0;
+                        sensorBLE3->value2 = excpectedData->humid;
+                        sensorBLE3->value3 = excpectedData->shake;
+                        sensorBLE1->value4 = excpectedData->tilt;
                         break;
                     default:
-                        Serial.printf("Znaleziono paczke o companyid: %X\n", incoming->company_id);
+                        Serial.printf("Znaleziono paczke o companyid: %X\n", excpectedData->company_id);
                         break;
                 }
             }
