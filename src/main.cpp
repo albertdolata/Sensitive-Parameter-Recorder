@@ -5,6 +5,7 @@
 #include "BLESensorManager.h"
 #include "CloudManager.h"
 #include "ContactSensor.h"
+#include "GPSManager.h"
 #include "PresenceSensor.h"
 #include "TempHumSensor.h"
 #include "secrets.h"
@@ -15,6 +16,9 @@ Sensor* sensors[NUM_SENSORS];
 CloudManager cloud;
 BLESensorManager* radarBLE;
 BLEScan* pBLEScan;
+GPSManager GPS(Serial2, 16, 17, 19200);
+
+unsigned long lastGpsRequest = 0;
 
 volatile int serverRespone;
 
@@ -25,6 +29,7 @@ void setup() {
 
     cloud.connectWiFi(ssid, password);
     cloud.initCloud();
+    GPS.begin();
 
     sensors[0] = new TempHumSensor("bme280 Centrala Główna", 0x76);
     sensors[1] = new BLESensor("Paleta szkło");
@@ -48,30 +53,24 @@ void setup() {
 }
 
 void loop() {
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - lastGpsRequest >= 10000) {
+        lastGpsRequest = millis();
+        GPS.requestPosition();
+    }
+
+    GPS.update();
+
+    if (GPS.hasFix()) {
+        Serial.print("----------------GPS ON----------------\n");
+        Serial.print("Lat: ");
+        Serial.print(GPS.getLatitude(), 6);
+        Serial.print("Lon: ");
+        Serial.print(GPS.getLongtitude(), 6);
+    }
     Serial.println("\n ------- Nasłuch BLE -------");
     BLEScanResults foundDevices = pBLEScan->start(6, false);
-    Serial.printf("Znalezione urządzenia BLE: %d\n", foundDevices.getCount());
-   
-    //kodzik na to co znalazł ble
-    for (int i = 0; i < foundDevices.getCount(); i++) {
-        BLEAdvertisedDevice device = foundDevices.getDevice(i);
-        
-        Serial.printf(" [%d] MAC: %s ", i + 1, device.getAddress().toString().c_str());
-        
-        if (device.haveName()) {
-            Serial.printf("| Nazwa: %s ", device.getName().c_str());
-        }
-        
-        if (device.haveManufacturerData()) {
-            std::string raw = device.getManufacturerData();
-            Serial.printf("| Dlugosc danych: %d bajtow ", raw.length());
-        }
-        
-        Serial.println();
-    }
-    Serial.println(" --------------------------------");
-    // -----------------------------------------------------
-
     pBLEScan->clearResults();
 
     Serial.println("\n ------- Odczyt z czujników -------");
@@ -82,11 +81,16 @@ void loop() {
     ThingSpeak.setField(1, sensors[0]->value1);  // temperatura z BME
     ThingSpeak.setField(2, sensors[0]->value2);  // wilgotność z BME
     ThingSpeak.setField(3, sensors[1]->value1);  // Temperatura z paleta szkło BLESensor
-    ThingSpeak.setField(4, sensors[1]->value2);  // Wilgotność z paleta szkło BLESensor
-    ThingSpeak.setField(5, sensors[1]->value3);  // Wychylenie z paleta telewizroy BLESensor
-    ThingSpeak.setField(6, sensors[3]->value1);  // Temperatura z paleta piwo BLESensor
+    ThingSpeak.setField(4, sensors[2]->value2);  // Wilgotność z paleta szkło BLESensor
+    ThingSpeak.setField(5, sensors[3]->value3);  // Wychylenie z paleta telewizroy BLESensor
+    ThingSpeak.setField(6, sensors[2]->value1);  // Temperatura z paleta piwo BLESensor
     ThingSpeak.setField(7, sensors[4]->value1);  // kontaktron (mocked)
     ThingSpeak.setField(8, sensors[5]->value1);  // obecność człowieka (mocked)
+
+    if (GPS.hasFix()) {
+        ThingSpeak.setLatitude(GPS.getLatitude());
+        ThingSpeak.setLongitude(GPS.getLongtitude());
+    }
 
     Serial.println("Wysyłanie danych do ThingSpeak");
     serverRespone = ThingSpeak.writeFields(channelNumber, writeAPIKey);
