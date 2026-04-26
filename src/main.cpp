@@ -81,8 +81,8 @@ void loop() {
     ThingSpeak.setField(1, sensors[0]->value1);  // temperatura z BME
     ThingSpeak.setField(2, sensors[0]->value2);  // wilgotność z BME
     ThingSpeak.setField(3, sensors[1]->value1);  // Temperatura z paleta szkło BLESensor
-    ThingSpeak.setField(4, sensors[2]->value2);  // Wilgotność z paleta szkło BLESensor
-    ThingSpeak.setField(5, sensors[3]->value3);  // Wychylenie z paleta telewizroy BLESensor
+    ThingSpeak.setField(4, sensors[2]->value1);  // Wilgotność z paleta szkło BLESensor
+    ThingSpeak.setField(5, sensors[3]->value1);  // Wychylenie z paleta telewizroy BLESensor
     ThingSpeak.setField(6, sensors[2]->value1);  // Temperatura z paleta piwo BLESensor
     ThingSpeak.setField(7, sensors[4]->value1);  // kontaktron (mocked)
     ThingSpeak.setField(8, sensors[5]->value1);  // obecność człowieka (mocked)
