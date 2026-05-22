@@ -6,14 +6,14 @@
 class GPSManager {
    private:
     double latitude;
-    double longtitude;
+    double longitude;
     bool isON;
 
     void parseResponse(String response) {
         int commaCounter;
         String rawTime;
         String rawLatitdue;
-        String rawLongtitude;
+        String rawLongitude;
         if (response.indexOf("+CGNSINF:") != -1) {
             commaCounter = response.indexOf(',');
             int nextComma = response.indexOf(',', commaCounter + 1);
@@ -27,10 +27,10 @@ class GPSManager {
                 rawLatitdue = response.substring(commaCounter + 1, nextComma);
                 commaCounter = nextComma;
                 nextComma = response.indexOf(',', commaCounter + 1);
-                rawLongtitude = response.substring(commaCounter + 1, nextComma);
+                rawLongitude = response.substring(commaCounter + 1, nextComma);
 
                 latitude = rawLatitdue.toDouble();
-                longtitude = rawLongtitude.toDouble();
+                longitude = rawLongitude.toDouble();
             } else {
                 isON = false;
             }
@@ -38,7 +38,7 @@ class GPSManager {
     }
 
    public:
-    GPSManager() : latitude(0.0), longtitude(0.0), isON(false) {}
+    GPSManager() : latitude(0.0), longitude(0.0), isON(false) {}
 
     void begin() {
         char rx_buff[128];
@@ -61,8 +61,8 @@ class GPSManager {
         return latitude;
     }
 
-    double getLongtitude() {
-        return longtitude;
+    double getLongitude() {
+        return longitude;
     }
 
     bool hasFix() {
