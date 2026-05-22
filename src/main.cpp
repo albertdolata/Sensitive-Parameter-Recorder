@@ -3,33 +3,43 @@
 #include "AccelSensor.h"
 #include "BLESensor.h"
 #include "BLESensorManager.h"
-#include "CloudManager.h"
 #include "ContactSensor.h"
 #include "GPSManager.h"
 #include "PresenceSensor.h"
 #include "TempHumSensor.h"
+#include "data_send_service.h"
 #include "secrets.h"
 
 #define NUM_SENSORS 6
+#define SIM_RX_PIN GPIO_NUM_16
+#define SIM_TX_PIN GPIO_NUM_17
+#define SIM_PWR_PIN GPIO_NUM_27
 
 Sensor* sensors[NUM_SENSORS];
-CloudManager cloud;
 BLESensorManager* radarBLE;
 BLEScan* pBLEScan;
-GPSManager GPS(Serial2, 16, 17, 19200);
+GPSManager GPS;
 
 unsigned long lastGpsRequest = 0;
-
-volatile int serverRespone;
 
 void setup() {
     Serial.begin(115200);
     delay(1000);
     Serial.println("\n ----------- Rejestrator uruchomiony -----------");
 
-    cloud.connectWiFi(ssid, password);
-    cloud.initCloud();
+    if (!sim7000_init(SIM_RX_PIN, SIM_TX_PIN, SIM_PWR_PIN)) {
+        Serial.println("Błąd inicjalizacji modemu SIM7000. Restartowanie...");
+        ESP.restart();
+    }
+
+    if (!sim7000_wait_for_network()) {
+        Serial.println("Nie można połączyć z siecią. Restartowanie...");
+        ESP.restart();
+    }
+
     GPS.begin();
+
+    data_service_init();
 
     sensors[0] = new TempHumSensor("bme280 Centrala Główna", 0x76);
     sensors[1] = new BLESensor("Paleta szkło");
@@ -53,22 +63,10 @@ void setup() {
 }
 
 void loop() {
-    unsigned long currentMillis = millis();
-
-    if (currentMillis - lastGpsRequest >= 10000) {
-        lastGpsRequest = millis();
-        GPS.requestPosition();
-    }
+    sensor_data_t current_data = {0};
 
     GPS.update();
 
-    if (GPS.hasFix()) {
-        Serial.print("----------------GPS ON----------------\n");
-        Serial.print("Lat: ");
-        Serial.print(GPS.getLatitude(), 6);
-        Serial.print("Lon: ");
-        Serial.print(GPS.getLongtitude(), 6);
-    }
     Serial.println("\n ------- Nasłuch BLE -------");
     BLEScanResults foundDevices = pBLEScan->start(6, false);
     pBLEScan->clearResults();
@@ -78,27 +76,26 @@ void loop() {
         sensors[i]->readData();
     }
 
-    ThingSpeak.setField(1, sensors[0]->value1);  // temperatura z BME
-    ThingSpeak.setField(2, sensors[0]->value2);  // wilgotność z BME
-    ThingSpeak.setField(3, sensors[1]->value1);  // Temperatura z paleta szkło BLESensor
-    ThingSpeak.setField(4, sensors[2]->value1);  // Wilgotność z paleta szkło BLESensor
-    ThingSpeak.setField(5, sensors[3]->value1);  // Wychylenie z paleta telewizroy BLESensor
-    ThingSpeak.setField(6, sensors[2]->value1);  // Temperatura z paleta piwo BLESensor
-    ThingSpeak.setField(7, sensors[4]->value1);  // kontaktron (mocked)
-    ThingSpeak.setField(8, sensors[5]->value1);  // obecność człowieka (mocked)
+    current_data.cell_info = sim7000_get_network_params();
+    current_data.latitude = GPS.getLatitude();
+    current_data.longitude = GPS.getLongitude();
+    current_data.temperature_main_central = sensors[0]->value1;
+    current_data.humidity_main_central = sensors[0]->value2;
+    current_data.shock_level_main_central = sensors[0]->value3;
+    current_data.shock_level_palette1 = sensors[1]->value1;
+    // narazie nie ma tych czujników, ale zostawiam miejsce w strukturze i
+    // kodzie, żeby łatwo było dodać w przyszłości
+    // current_data.shock_level_palette2 = sensors[2]->value1;
+    // current_data.shock_level_palette3 = sensors[3]->value1;
+    current_data.temperature_secondary_central = 0;
+    current_data.humidity_secondary_central = 0;
+    current_data.shock_level_secondary_central = 0;
 
-    if (GPS.hasFix()) {
-        ThingSpeak.setLatitude(GPS.getLatitude());
-        ThingSpeak.setLongitude(GPS.getLongtitude());
+    if (data_service_push(&current_data)) {
+        Serial.println("Dane dodane do kolejki wysyłkowej.");
+    } else {
+        Serial.println("Kolejka wysyłkowa pełna! Dane odrzucone.");
     }
 
-    Serial.println("Wysyłanie danych do ThingSpeak");
-    serverRespone = ThingSpeak.writeFields(channelNumber, writeAPIKey);
-    if (serverRespone == 200)
-        Serial.println("Dane zostały wysłane");
-    else
-        Serial.printf("Coś poszło nie tak, kod błędu: %d", serverRespone);
-
-    delay(20000);  // tak dużo bo ThingSpeak na darmowym konicie wysyła co 15
-                   // sek dane
+    vTaskDelay(pdMS_TO_TICKS(5000));
 }
