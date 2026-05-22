@@ -1,6 +1,7 @@
 #include "data_send_service.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "esp_log.h"
 #include <string.h>
 
@@ -24,7 +25,7 @@ static void data_sender_task(void *pvParameters) {
             }
 
             if(!mqtt_connected){
-                if(sim7000_mqtt_connect(NULL)){
+                if(sim7000_mqtt_connect()){
                     mqtt_connected = true;
                 }else{
                     ESP_LOGW(TAG,"Błąd negocjacji MQTT. Ponowienie za 5s.");
