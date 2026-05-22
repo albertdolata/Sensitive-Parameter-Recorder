@@ -72,7 +72,7 @@ bool sim7000_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
             .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
             .rx_flow_ctrl_thresh = 0,
             .source_clk = UART_SCLK_APB,
-            .flags = {}
+            //.flags = {}
         };
 
         ESP_ERROR_CHECK(uart_param_config(SIM_UART_PORT, &uart_config));
