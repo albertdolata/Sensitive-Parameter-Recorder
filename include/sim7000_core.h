@@ -90,7 +90,14 @@ bool sim7000_mqtt_connect(void);
  */
 static void sim7000_uart_event_task(void *pvParameters);
 
-
+/** @brief Wysyła komendę AT do modemu.
+ * @param[in] cmd Komenda AT do wysłania.
+ * @param[out] rx_buf Bufor na odpowiedź z modemu.
+ * @param[in] rx_buf_len Długość bufora na odpowiedź.
+ * @param[in] timeout_ms Czas oczekiwania na odpowiedź.
+ * @return Liczba bajtów odebranych, lub -1 w przypadku błędu.
+ */
+int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_ms);
 
 #ifdef __cplusplus
 
