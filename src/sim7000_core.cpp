@@ -22,7 +22,7 @@ static char fsm_rx_buffer[BUF_SIZE];
 static volatile int fsm_rx_idx = 0;
 static const char *TAG = "SIM7000";
 
-static int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_ms) {
+int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_ms) {
     xEventGroupClearBits(at_event_group, AT_BIT_OK | AT_BIT_ERROR | AT_BIT_PROMPT);
     fsm_rx_idx = 0;
     memset(fsm_rx_buffer, 0, BUF_SIZE);
