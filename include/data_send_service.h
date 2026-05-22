@@ -21,9 +21,20 @@ extern "C" {
  * 3. Zwiększ rozmiar bufora json_buffer if needed.
  */
 typedef struct {
-    float temperature;      /**< Temperatura w stopniach Celsjusza. */
-    float humidity;         /**< Wilgotność względna w procentach. */
+    //---Dane z sensorów centrali głównej---
+    float temperature_main_central;      /**< Temperatura w stopniach Celsjusza. */
+    float humidity_main_central;         /**< Wilgotność względna w procentach. */
+    float shock_level_main_central;     /**< Poziom wstrząsu, z akcelerometru. */
+    //---Dane z centrali pomocniczej---
+    float temperature_secondary_central;      /**< Temperatura w stopniach Celsjusza. */
+    float humidity_secondary_central;         /**< Wilgotność względna w procentach. */
+    float shock_level_secondary_central;     /**< Poziom wstrząsu, z akcelerometru. */
+    //---Dane lokalizacyjne i sieciowe ---
+    double latitude;         /**< Szerokość geograficzna, z gps. */
+    double longitude;         /**< Długość geograficzna, z gps. */
     cell_info_t cell_info;  /**< Metadane stacji bazowej, z której wysłano pakiet. */
+    //--Dane z palety---
+    float shock_level_palette1;     /**< Poziom wstrząsu, z akcelerometru palety. */
 } sensor_data_t;
 
 
