@@ -100,6 +100,19 @@ void SIMComInit() {
     }
 }
 
+void SensorTableInit(Sensor* sensor[]) {
+    sensor[0] = new TempHumSensor("bme280 Centrala Główna", 0x76);
+    sensor[1] = new BLESensor("Paleta szkło");
+    sensor[2] = new BLESensor("Paleta telewizory");
+    sensor[3] = new BLESensor("Paleta piwo");
+    sensor[4] = new ContactSensor("Kontaktron");
+    sensor[5] = new PresenceSensor("Czujnik obecności człowieka");
+
+    for (int i = 0; i < NUM_SENSORS; i++) {
+        sensor[i]->initialize();
+    }
+}
+
 Sensor* sensors[NUM_SENSORS];
 BLESensorManager* radarBLE;
 BLEScan* pBLEScan;
@@ -112,22 +125,13 @@ void setup() {
 
     SPIFFSinit();
 
-   SIMComInit();
+    SIMComInit();
 
     GPS.begin();
 
     data_service_init();
 
-    sensors[0] = new TempHumSensor("bme280 Centrala Główna", 0x76);
-    sensors[1] = new BLESensor("Paleta szkło");
-    sensors[2] = new BLESensor("Paleta telewizory");
-    sensors[3] = new BLESensor("Paleta piwo");
-    sensors[4] = new ContactSensor("Kontaktron");
-    sensors[5] = new PresenceSensor("Czujnik obecności człowieka");
-
-    for (int i = 0; i < NUM_SENSORS; i++) {
-        sensors[i]->initialize();
-    }
+   SensorTableInit(sensors);
 
     BLEDevice::init("");
     pBLEScan = BLEDevice::getScan();
