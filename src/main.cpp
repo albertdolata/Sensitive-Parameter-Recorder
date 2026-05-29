@@ -58,21 +58,48 @@ void sendBackupData() {
         return;
     }
 
+    if(dataFile.size() == 0) {
+        dataFile.close();
+        SPIFFS.remove("/data_backup.dat");
+        return;
+    }
+
+    File tempFile = SPIFFS.open("/temp_backup.dat", FILE_WRITE);
+    if(!tempFile) {
+        Serial.println("Błąd otwierania tymczasowego pliku do zapisu danych offline!");
+        dataFile.close();
+        return;
+    }
+
     sensor_data_t offlineData = {0};
-    bool allDataSent = true;
+    bool QueueFull = false;
+    int dataNotSend = 0;
+
 
     while(dataFile.read((uint8_t*)&offlineData, sizeof(sensor_data_t)) == sizeof(sensor_data_t)) {
-        if(!data_service_push(&offlineData)) {
-            allDataSent = false;
-            Serial.println("Kolejka wysyłkowa pełna! Nie można wysłać danych offline. Próba ponowienia później.");
-            break;
+        if(!QueueFull) {
+            if(!data_service_push(&offlineData)) {
+                QueueFull = true;
+                tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
+                dataNotSend++;
+            }
+        } else {
+            tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
+            dataNotSend++;
         }
     }
     
     dataFile.close();
-    if(allDataSent) {
-        SPIFFS.remove("/data_backup.dat");
-        Serial.println("Wszystkie dane offline zostały wysłane. Plik backupu usunięty.");
+    tempFile.close();
+    SPIFFS.remove("/data_backup.dat");
+
+    if(dataNotSend > 0) {
+        Serial.print("Liczba nie wysłanych danych offline: ");
+        Serial.println(dataNotSend);
+        SPIFFS.rename("/temp_backup.dat", "/data_backup.dat");
+    } else {
+        SPIFFS.remove("/temp_backup.dat");
+        Serial.println("Wszystkie dane offline zostały wysłane pomyślnie.");
     }
 }
 
@@ -160,14 +187,20 @@ void setup() {
     SensorTableInit(sensors);
 
     BLEInit();
+
 }
 
 void loop() {
     sensor_data_t current_data = {0};
+    static uint32_t last_gps_time = 0;
 
     GPS.update();
     if(GPS.hasFix()) {
-        setESP32Time(GPS.getTimestamp());
+        uint32_t current_gps_time = GPS.getTimestamp();
+        if(current_gps_time != last_gps_time) {
+            setESP32Time(current_gps_time);
+            last_gps_time = current_gps_time;
+        }
     }
 
     Serial.println("\n ------- Nasłuch BLE -------");
