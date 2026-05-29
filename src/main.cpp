@@ -10,6 +10,7 @@
 #include "data_send_service.h"
 #include "secrets.h"
 #include "sys/time.h"
+#include "SPIFFS.h"
 
 #define NUM_SENSORS 6
 #define SIM_RX_PIN GPIO_NUM_16
@@ -21,6 +22,31 @@ void setESP32Time(uint32_t timestamp) {
     tv.tv_sec = timestamp;
     tv.tv_usec = 0;
     settimeofday(&tv, NULL);
+}
+
+void testSPIFFS() {
+    if (!SPIFFS.begin(true)) {
+        Serial.println("Błąd montowania SPIFFS!");
+    } else {
+        Serial.println("SPIFFS zamontowany pomyślnie.");
+        File testFile = SPIFFS.open("/test.txt", FILE_WRITE);
+        if (!testFile) {
+            Serial.println("Błąd otwierania pliku do zapisu!");
+        } else {
+            testFile.println("In the future there will be some data stored here if the queue is full or the network is down.");
+            testFile.close();
+            Serial.println("Plik zapisany pomyślnie.");
+            testFile = SPIFFS.open("/test.txt", FILE_READ);
+            if (!testFile) {
+                Serial.println("Błąd otwierania pliku do odczytu!");
+            } else {
+                String fileContent = testFile.readString();
+                testFile.close();
+                Serial.println("Zawartość pliku:");
+                Serial.println(fileContent);
+            }
+        }
+    }
 }
 
 
@@ -43,6 +69,8 @@ void setup() {
         Serial.println("Nie można połączyć z siecią. Restartowanie...");
         ESP.restart();
     }
+
+    testSPIFFS();
 
     GPS.begin();
 
