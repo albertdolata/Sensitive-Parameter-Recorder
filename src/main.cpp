@@ -49,6 +49,17 @@ void testSPIFFS() {
     }
 }
 
+void saveDataOffline(sensor_data_t* data){
+    File dataFile = SPIFFS.open("/data_backup.txt", FILE_APPEND);
+    if (!dataFile) {
+        Serial.println("Błąd otwierania pliku do zapisu danych offline!");
+        return;
+    } else {
+        dataFile.write((uint8_t*)data, sizeof(sensor_data_t));
+        dataFile.close();
+        Serial.println("Dane zapisane offline pomyślnie.");
+    }
+}
 
 Sensor* sensors[NUM_SENSORS];
 BLESensorManager* radarBLE;
