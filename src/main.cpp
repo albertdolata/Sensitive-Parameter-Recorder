@@ -9,18 +9,25 @@
 #include "TempHumSensor.h"
 #include "data_send_service.h"
 #include "secrets.h"
+#include "sys/time.h"
 
 #define NUM_SENSORS 6
 #define SIM_RX_PIN GPIO_NUM_16
 #define SIM_TX_PIN GPIO_NUM_17
 #define SIM_PWR_PIN GPIO_NUM_27
 
+void setESP32Time(uint32_t timestamp) {
+    struct timeval tv;
+    tv.tv_sec = timestamp;
+    tv.tv_usec = 0;
+    settimeofday(&tv, NULL);
+}
+
+
 Sensor* sensors[NUM_SENSORS];
 BLESensorManager* radarBLE;
 BLEScan* pBLEScan;
 GPSManager GPS;
-
-unsigned long lastGpsRequest = 0;
 
 void setup() {
     Serial.begin(115200);
@@ -66,6 +73,9 @@ void loop() {
     sensor_data_t current_data = {0};
 
     GPS.update();
+    if(GPS.hasFix()) {
+        setESP32Time(GPS.getTimestamp());
+    }
 
     Serial.println("\n ------- Nasłuch BLE -------");
     BLEScanResults foundDevices = pBLEScan->start(6, false);
@@ -90,6 +100,7 @@ void loop() {
     current_data.temperature_secondary_central = 0;
     current_data.humidity_secondary_central = 0;
     current_data.shock_level_secondary_central = 0;
+    current_data.timestamp = time(NULL);
 
     if (data_service_push(&current_data)) {
         Serial.println("Dane dodane do kolejki wysyłkowej.");
