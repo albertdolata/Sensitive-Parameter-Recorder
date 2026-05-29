@@ -88,6 +88,18 @@ void assignDataToStruct(sensor_data_t* data, GPSManager* gps, Sensor* sensors[])
     data->timestamp = time(NULL);
 }
 
+void SIMComInit() {
+    if (!sim7000_init(SIM_RX_PIN, SIM_TX_PIN, SIM_PWR_PIN)) {
+        Serial.println("Błąd inicjalizacji modemu SIM7000. Restartowanie...");
+        ESP.restart();
+    }
+
+    if (!sim7000_wait_for_network()) {
+        Serial.println("Nie można połączyć z siecią. Restartowanie...");
+        ESP.restart();
+    }
+}
+
 Sensor* sensors[NUM_SENSORS];
 BLESensorManager* radarBLE;
 BLEScan* pBLEScan;
@@ -100,15 +112,7 @@ void setup() {
 
     SPIFFSinit();
 
-    if (!sim7000_init(SIM_RX_PIN, SIM_TX_PIN, SIM_PWR_PIN)) {
-        Serial.println("Błąd inicjalizacji modemu SIM7000. Restartowanie...");
-        ESP.restart();
-    }
-
-    if (!sim7000_wait_for_network()) {
-        Serial.println("Nie można połączyć z siecią. Restartowanie...");
-        ESP.restart();
-    }
+   SIMComInit();
 
     GPS.begin();
 
