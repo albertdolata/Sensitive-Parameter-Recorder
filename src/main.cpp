@@ -136,6 +136,14 @@ void readDataFromSensor(Sensor* sensor[]) {
     }
 }
 
+void sendDataToServer(sensor_data_t* current_data) {
+    if(!data_service_push(current_data)) {
+        saveDataOffline(current_data);
+    } else {
+        sendBackupData();
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -171,11 +179,8 @@ void loop() {
 
     assignDataToStruct(&current_data, &GPS, sensors);
 
-    if(!data_service_push(&current_data)) {
-        saveDataOffline(&current_data);
-    } else {
-        sendBackupData();
-    }
+    Serial.println("\n ------- Wysyłka danych -------");
+    sendDataToServer(&current_data);
 
     vTaskDelay(pdMS_TO_TICKS(5000));
 }
