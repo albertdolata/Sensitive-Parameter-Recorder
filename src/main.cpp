@@ -24,6 +24,12 @@ void setESP32Time(uint32_t timestamp) {
     settimeofday(&tv, NULL);
 }
 
+void SPIFFSinit(){
+    if(!SPIFFS.begin(true)) {
+        ESP.restart();
+    }
+}
+
 void saveDataOffline(sensor_data_t* data){
     File dataFile = SPIFFS.open("/data_backup.dat", FILE_APPEND);
     if (!dataFile) {
@@ -91,6 +97,8 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     Serial.println("\n ----------- Rejestrator uruchomiony -----------");
+
+    SPIFFSinit();
 
     if (!sim7000_init(SIM_RX_PIN, SIM_TX_PIN, SIM_PWR_PIN)) {
         Serial.println("Błąd inicjalizacji modemu SIM7000. Restartowanie...");
