@@ -173,10 +173,10 @@ void loop() {
 
     assignDataToStruct(&current_data, &GPS, sensors);
 
-    if (data_service_push(&current_data)) {
-        Serial.println("Dane dodane do kolejki wysyłkowej.");
+    if(!data_service_push(&current_data)) {
+        saveDataOffline(&current_data);
     } else {
-        Serial.println("Kolejka wysyłkowa pełna! Dane odrzucone.");
+        sendBackupData();
     }
 
     vTaskDelay(pdMS_TO_TICKS(5000));
