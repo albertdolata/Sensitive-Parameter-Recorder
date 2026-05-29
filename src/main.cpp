@@ -24,31 +24,6 @@ void setESP32Time(uint32_t timestamp) {
     settimeofday(&tv, NULL);
 }
 
-void testSPIFFS() {
-    if (!SPIFFS.begin(true)) {
-        Serial.println("Błąd montowania SPIFFS!");
-    } else {
-        Serial.println("SPIFFS zamontowany pomyślnie.");
-        File testFile = SPIFFS.open("/test.txt", FILE_WRITE);
-        if (!testFile) {
-            Serial.println("Błąd otwierania pliku do zapisu!");
-        } else {
-            testFile.println("In the future there will be some data stored here if the queue is full or the network is down.");
-            testFile.close();
-            Serial.println("Plik zapisany pomyślnie.");
-            testFile = SPIFFS.open("/test.txt", FILE_READ);
-            if (!testFile) {
-                Serial.println("Błąd otwierania pliku do odczytu!");
-            } else {
-                String fileContent = testFile.readString();
-                testFile.close();
-                Serial.println("Zawartość pliku:");
-                Serial.println(fileContent);
-            }
-        }
-    }
-}
-
 void saveDataOffline(sensor_data_t* data){
     File dataFile = SPIFFS.open("/data_backup.dat", FILE_APPEND);
     if (!dataFile) {
@@ -126,8 +101,6 @@ void setup() {
         Serial.println("Nie można połączyć z siecią. Restartowanie...");
         ESP.restart();
     }
-
-    testSPIFFS();
 
     GPS.begin();
 
