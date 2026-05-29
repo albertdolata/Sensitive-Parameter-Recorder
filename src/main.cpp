@@ -130,6 +130,12 @@ void SensorTableInit(Sensor* sensor[]) {
     }
 }
 
+void readDataFromSensor(Sensor* sensor[]) {
+    for (int i = 0; i < NUM_SENSORS; i++) {
+        sensor[i]->readData();
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -161,9 +167,7 @@ void loop() {
     pBLEScan->clearResults();
 
     Serial.println("\n ------- Odczyt z czujników -------");
-    for (int i = 0; i < NUM_SENSORS; i++) {
-        sensors[i]->readData();
-    }
+    readDataFromSensor(sensors);
 
     assignDataToStruct(&current_data, &GPS, sensors);
 
