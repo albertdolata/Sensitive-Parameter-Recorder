@@ -7,7 +7,23 @@ class GPSManager {
    private:
     double latitude;
     double longitude;
+    uint32_t timestamp;
     bool isON;
+
+    void parseTime(String rawTime) {
+        if (rawTime.length() >= 14) {
+            struct tm timeinfo = {0};
+            timeinfo.tm_year = rawTime.substring(0, 4).toInt() - 1900;
+            timeinfo.tm_mon = rawTime.substring(4, 6).toInt() - 1;
+            timeinfo.tm_mday = rawTime.substring(6, 8).toInt();
+            timeinfo.tm_hour = rawTime.substring(8, 10).toInt();
+            timeinfo.tm_min = rawTime.substring(10, 12).toInt();
+            timeinfo.tm_sec = rawTime.substring(12, 14).toInt();
+            timestamp = mktime(&timeinfo); 
+        } else {
+            timestamp = 0;
+        }
+    }
 
     void parseResponse(String response) {
         int commaCounter;
@@ -31,12 +47,13 @@ class GPSManager {
 
                 latitude = rawLatitdue.toDouble();
                 longitude = rawLongitude.toDouble();
+                parseTime(rawTime);
             } else {
                 isON = false;
             }
         }
     }
-
+    
    public:
     GPSManager() : latitude(0.0), longitude(0.0), isON(false) {}
 
@@ -63,6 +80,10 @@ class GPSManager {
 
     double getLongitude() {
         return longitude;
+    }
+
+    uint32_t getTimestamp() {
+        return timestamp;
     }
 
     bool hasFix() {
