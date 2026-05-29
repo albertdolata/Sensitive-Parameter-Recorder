@@ -89,6 +89,24 @@ void sendBackupData() {
     }
 }
 
+void assignDataToStruct(sensor_data_t* data, GPSManager* gps, Sensor* sensors[]) {
+    data->cell_info = sim7000_get_network_params();
+    data->latitude = gps->getLatitude();
+    data->longitude = gps->getLongitude();
+    data->temperature_main_central = sensors[0]->value1;
+    data->humidity_main_central = sensors[0]->value2;
+    data->shock_level_main_central = sensors[1]->value1;
+    data->shock_level_palette1 = sensors[1]->value1;
+    // narazie nie ma tych czujników, ale zostawiam miejsce w strukturze i
+    // kodzie, żeby łatwo było dodać w przyszłości
+    // data->shock_level_palette2 = sensors[2]->value1;
+    // data->shock_level_palette3 = sensors[3]->value1;
+    data->temperature_secondary_central = 0;
+    data->humidity_secondary_central = 0;
+    data->shock_level_secondary_central = 0;
+    data->timestamp = time(NULL);
+}
+
 Sensor* sensors[NUM_SENSORS];
 BLESensorManager* radarBLE;
 BLEScan* pBLEScan;
@@ -153,21 +171,7 @@ void loop() {
         sensors[i]->readData();
     }
 
-    current_data.cell_info = sim7000_get_network_params();
-    current_data.latitude = GPS.getLatitude();
-    current_data.longitude = GPS.getLongitude();
-    current_data.temperature_main_central = sensors[0]->value1;
-    current_data.humidity_main_central = sensors[0]->value2;
-    current_data.shock_level_main_central = sensors[1]->value1;
-    current_data.shock_level_palette1 = sensors[1]->value1;
-    // narazie nie ma tych czujników, ale zostawiam miejsce w strukturze i
-    // kodzie, żeby łatwo było dodać w przyszłości
-    // current_data.shock_level_palette2 = sensors[2]->value1;
-    // current_data.shock_level_palette3 = sensors[3]->value1;
-    current_data.temperature_secondary_central = 0;
-    current_data.humidity_secondary_central = 0;
-    current_data.shock_level_secondary_central = 0;
-    current_data.timestamp = time(NULL);
+    assignDataToStruct(&current_data, &GPS, sensors);
 
     if (data_service_push(&current_data)) {
         Serial.println("Dane dodane do kolejki wysyłkowej.");
