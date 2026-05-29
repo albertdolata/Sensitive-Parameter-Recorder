@@ -35,6 +35,7 @@ typedef struct {
     cell_info_t cell_info;  /**< Metadane stacji bazowej, z której wysłano pakiet. */
     //--Dane z palety---
     float shock_level_palette1;     /**< Poziom wstrząsu, z akcelerometru palety. */
+    uint32_t timestamp;             /**< Znacznik czasu pomiaru, w formacie UNIX epoch. */
 } sensor_data_t;
 
 
