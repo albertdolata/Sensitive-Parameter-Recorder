@@ -81,7 +81,7 @@ void loop() {
     current_data.longitude = GPS.getLongitude();
     current_data.temperature_main_central = sensors[0]->value1;
     current_data.humidity_main_central = sensors[0]->value2;
-    current_data.shock_level_main_central = sensors[0]->value3;
+    current_data.shock_level_main_central = sensors[1]->value1;
     current_data.shock_level_palette1 = sensors[1]->value1;
     // narazie nie ma tych czujników, ale zostawiam miejsce w strukturze i
     // kodzie, żeby łatwo było dodać w przyszłości

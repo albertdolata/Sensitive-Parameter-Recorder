@@ -65,7 +65,7 @@ bool sim7000_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
         gpio_set_level(pwr_pin, 0);
 
         uart_config_t uart_config = {
-            .baud_rate = 115200,
+            .baud_rate = 19200,
             .data_bits = UART_DATA_8_BITS,
             .parity    = UART_PARITY_DISABLE,
             .stop_bits = UART_STOP_BITS_1,
@@ -84,32 +84,32 @@ bool sim7000_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
         hw_initialized = true;
     }
 
-        char rx_buf[BUF_SIZE];
-        bool is_alive = false;
-        const int max_retries = 3;
+       char rx_buf[BUF_SIZE];
+    bool is_alive = false;
+    const int max_retries = 3;
 
         for (int attempt = 1; attempt <= max_retries; ++attempt) {
         ESP_LOGI(TAG, "Próba sprzętowego uruchomienia modemu %d/%d...", attempt, max_retries);
-        
-        gpio_set_level(pwr_pin, 1);
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        gpio_set_level(pwr_pin, 0);
-        vTaskDelay(pdMS_TO_TICKS(3000));
-
-        for (int i = 0; i < 5; i++) {
-            uart_flush_input(SIM_UART_PORT); 
             
-            if (send_at_cmd("AT\r\n", rx_buf, sizeof(rx_buf), 500) > 0 && strstr(rx_buf, "OK")) {
-                is_alive = true;
-                break;
+            gpio_set_level(pwr_pin, 1);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+            gpio_set_level(pwr_pin, 0);
+        vTaskDelay(pdMS_TO_TICKS(3000));
+            
+            for (int i = 0; i < 5; i++) {
+                uart_flush_input(SIM_UART_PORT); 
+            
+                if (send_at_cmd("AT\r\n", rx_buf, sizeof(rx_buf), 500) > 0 && strstr(rx_buf, "OK")) {
+                    is_alive = true;
+                    break;
+                }
+                vTaskDelay(pdMS_TO_TICKS(500));
             }
-            vTaskDelay(pdMS_TO_TICKS(500));
-        }
 
-        if (is_alive) {
+            if (is_alive) {
             ESP_LOGI(TAG, "Modem odpowiada (AT -> OK). Synchronizacja udana.");
             break; 
-        } else {
+            } else {
             ESP_LOGE(TAG, "Brak odpowiedzi na port UART. Ponawiam Power Sequence...");
         }
     }
