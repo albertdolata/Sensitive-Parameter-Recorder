@@ -50,7 +50,7 @@ void testSPIFFS() {
 }
 
 void saveDataOffline(sensor_data_t* data){
-    File dataFile = SPIFFS.open("/data_backup.txt", FILE_APPEND);
+    File dataFile = SPIFFS.open("/data_backup.dat", FILE_APPEND);
     if (!dataFile) {
         Serial.println("Błąd otwierania pliku do zapisu danych offline!");
         return;
@@ -58,6 +58,34 @@ void saveDataOffline(sensor_data_t* data){
         dataFile.write((uint8_t*)data, sizeof(sensor_data_t));
         dataFile.close();
         Serial.println("Dane zapisane offline pomyślnie.");
+    }
+}
+
+void sendBackupData() {
+    if(!SPIFFS.exists("/data_backup.dat")) {
+        return;
+    }
+    File dataFile = SPIFFS.open("/data_backup.dat", FILE_READ);
+    if(!dataFile) {
+        Serial.println("Błąd otwierania pliku z danymi offline!");
+        return;
+    }
+
+    sensor_data_t offlineData = {0};
+    bool allDataSent = true;
+
+    while(dataFile.read((uint8_t*)&offlineData, sizeof(sensor_data_t)) == sizeof(sensor_data_t)) {
+        if(!data_service_push(&offlineData)) {
+            allDataSent = false;
+            Serial.println("Kolejka wysyłkowa pełna! Nie można wysłać danych offline. Próba ponowienia później.");
+            break;
+        }
+    }
+    
+    dataFile.close();
+    if(allDataSent) {
+        SPIFFS.remove("/data_backup.dat");
+        Serial.println("Wszystkie dane offline zostały wysłane. Plik backupu usunięty.");
     }
 }
 
