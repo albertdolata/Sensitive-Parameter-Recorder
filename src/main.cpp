@@ -17,6 +17,12 @@
 #define SIM_TX_PIN GPIO_NUM_17
 #define SIM_PWR_PIN GPIO_NUM_27
 
+Sensor* sensors[NUM_SENSORS];
+BLESensorManager* radarBLE;
+BLEScan* pBLEScan;
+GPSManager GPS;
+
+
 void setESP32Time(uint32_t timestamp) {
     struct timeval tv;
     tv.tv_sec = timestamp;
@@ -100,6 +106,17 @@ void SIMComInit() {
     }
 }
 
+void BLEInit() {
+    BLEDevice::init("");
+    pBLEScan = BLEDevice::getScan();
+    radarBLE = new BLESensorManager(sensors[1], sensors[2], sensors[3]);
+
+    pBLEScan->setAdvertisedDeviceCallbacks(radarBLE);
+    pBLEScan->setActiveScan(true);
+    pBLEScan->setInterval(100);
+    pBLEScan->setWindow(99);
+}
+
 void SensorTableInit(Sensor* sensor[]) {
     sensor[0] = new TempHumSensor("bme280 Centrala Główna", 0x76);
     sensor[1] = new BLESensor("Paleta szkło");
@@ -112,11 +129,6 @@ void SensorTableInit(Sensor* sensor[]) {
         sensor[i]->initialize();
     }
 }
-
-Sensor* sensors[NUM_SENSORS];
-BLESensorManager* radarBLE;
-BLEScan* pBLEScan;
-GPSManager GPS;
 
 void setup() {
     Serial.begin(115200);
@@ -131,16 +143,9 @@ void setup() {
 
     data_service_init();
 
-   SensorTableInit(sensors);
+    SensorTableInit(sensors);
 
-    BLEDevice::init("");
-    pBLEScan = BLEDevice::getScan();
-    radarBLE = new BLESensorManager(sensors[1], sensors[2], sensors[3]);
-
-    pBLEScan->setAdvertisedDeviceCallbacks(radarBLE);
-    pBLEScan->setActiveScan(true);
-    pBLEScan->setInterval(100);
-    pBLEScan->setWindow(99);
+    BLEInit();
 }
 
 void loop() {
