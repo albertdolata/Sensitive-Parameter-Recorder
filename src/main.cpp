@@ -115,9 +115,9 @@ void assignDataToStruct(sensor_data_t* data, GPSManager* gps, Sensor* sensors[])
     // kodzie, żeby łatwo było dodać w przyszłości
     // data->shock_level_palette2 = sensors[2]->value1;
     // data->shock_level_palette3 = sensors[3]->value1;
-    data->temperature_secondary_central = 0;
-    data->humidity_secondary_central = 0;
-    data->shock_level_secondary_central = 0;
+    data->temperature_secondary_central = 21.37;
+    data->humidity_secondary_central = 67.69;
+    data->shock_level_secondary_central = 0.66;
     data->timestamp = time(NULL);
 }
 
