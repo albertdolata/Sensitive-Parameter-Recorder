@@ -1,36 +1,32 @@
 #pragma once
 
-#include <Adafruit_BME280.h>
-#include <Adafruit_Sensor.h>
-#include <Wire.h>
-
 #include "Sensor.h"
+#include <Adafruit_Si7021.h>
+
 
 class TempHumSensor : public Sensor {
    private:
-    Adafruit_BME280 bme;
-    uint8_t i2cAddress;
+    Adafruit_Si7021 adafruit_si7021;
+    float temperature;
+    float humidity;
 
    public:
-    TempHumSensor(String name, uint8_t address) : Sensor(name) {
-        i2cAddress = address;
-    }
+    TempHumSensor() : temperature(0.0), humidity(0.0) {}
 
     bool initialize() override {
-        if (bme.begin(i2cAddress))
-            return true;
-        else
-            return false;
+        return adafruit_si7021.begin();
     }
 
     void readData() override {
-        value1 = bme.readTemperature();
-        value2 = bme.readHumidity();
-        value3 = bme.readPressure()/100;
-        Serial.printf(
-            "%s -> Temperatura: %.2f *C | Wilgotność: %.2f %% | Ciśnienie: "
-            "%.2f hPa\n",
-            sensorName.c_str(), bme.readTemperature(), bme.readHumidity(),
-            bme.readPressure() / 100.0F);
+        temperature = adafruit_si7021.readTemperature();
+        humidity = adafruit_si7021.readHumidity();
+    }
+
+    float getTemperature() const {
+        return temperature;
+    }
+
+    float getHumidity() const {
+        return humidity;
     }
 };
