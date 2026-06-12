@@ -34,13 +34,36 @@ static void data_sender_task(void* pvParameters) {
             }
 
             snprintf(json_buffer, sizeof(json_buffer),
-                     "{\"temp_m\":%.2f,\"hum_m\":%.2f,\"shock_m\":%.2f,\"temp_"
-                     "s\":%.2f,\"hum_s\":%.2f,\"shock_s\":%.2f,\"lat\":%.6f,"
-                     "\"lon\":%.6f,\"shock_p1\":%.2f,"
-                     "\"mcc\":%u,\"mnc\":%u,\"tac\":%lu,\"cid\":%lu}",
+                     "{"
+                     "\"mcent\":{"
+                     "\"temp\":%.2f,"
+                     "\"hum\":%.2f,"
+                     "\"shock\":%.2f,"
+                     "\"time\":%lu"
+                     "},"
+                     "\"scent\":{"
+                     "\"temp\":%.2f,"
+                     "\"hum\":%.2f,"
+                     "\"shock\":%.2f"
+                     "},"
+                     "\"location\":{"
+                     "\"latg\":%.6f,"
+                     "\"long\":%.6f"
+                     "},"
+                     "\"p1\":{"
+                     "\"shock\":%.2f"
+                     "},"
+                     "\"cell\":{"
+                     "\"mcc\":%u,"
+                     "\"mnc\":%u,"
+                     "\"tac\":%lu,"
+                     "\"cid\":%lu"
+                     "}"
+                     "}",
                      incoming_data.temperature_main_central,
                      incoming_data.humidity_main_central,
                      incoming_data.shock_level_main_central,
+                     (unsigned long)incoming_data.timestamp,
                      incoming_data.temperature_secondary_central,
                      incoming_data.humidity_secondary_central,
                      incoming_data.shock_level_secondary_central,
