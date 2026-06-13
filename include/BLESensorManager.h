@@ -39,7 +39,8 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
    public:
     BLESensorManager(BLEPalletSensor* palletSensor1,
                      BLEPalletSensor* palletSensor2,
-                     BLESecondaryCentral* secondaryCentral, uint32_t NodeId1, uint32_t NodeId2)
+                     BLESecondaryCentral* secondaryCentral, uint32_t NodeId1,
+                     uint32_t NodeId2)
         : palletSensor1(palletSensor1),
           palletSensor2(palletSensor2),
           secondaryCentral(secondaryCentral),
@@ -79,7 +80,7 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
                                         expectedData->node_id);
                                     break;
                             }
-                        break;
+                            break;
                         case 0x02:
                             secondaryCentral->updateDataFromBLE(
                                 expectedData->specific.env.temp,
