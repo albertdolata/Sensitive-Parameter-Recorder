@@ -1,15 +1,17 @@
 #pragma once
 
 #include "Sensor.h"
+#include <Arduino.h>
 
 class BLEPalletSensor : public Sensor {
    private:
     float axisX;
     float axisY;
     float axisZ;
+    bool motionDetected;
 
    public:
-    BLEPalletSensor() : axisX(0.0), axisY(0.0), axisZ(0.0) {}
+    BLEPalletSensor() : axisX(0.0), axisY(0.0), axisZ(0.0), motionDetected(false) {}
 
     bool initialize() override {
         return true;
@@ -29,10 +31,15 @@ class BLEPalletSensor : public Sensor {
         return axisZ;
     }
 
-    void updateDataFromBLE(float x, float y, float z) {
-        axisX = x;
-        axisY = y;
-        axisZ = z;
+    bool isMotionDetected() const {
+        return motionDetected;
+    }
+
+    void updateDataFromBLE(int16_t x, int16_t y, int16_t z, uint8_t motion) {
+        axisX = x / 16000.0f;
+        axisY = y / 16000.0f;
+        axisZ = z / 16000.0f;
+        motionDetected = (motion == 1);
     }
 
 };

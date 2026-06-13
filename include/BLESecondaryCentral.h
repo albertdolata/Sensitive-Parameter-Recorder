@@ -10,7 +10,7 @@ class BLESecondarySensor : public Sensor {
     bool isClosed;
 
    public:
-    BLESecondarySensor() : temp(0), hum(0), isClosed(false) {}
+    BLESecondarySensor() : temp(0.0), hum(0.0), isClosed(false) {}
 
     bool initialize() override {
         return true;
