@@ -9,7 +9,7 @@
 #include "BLESecondaryCentral.h"
 #include "Sensor.h"
 
-struct __attribute__((packed)) sensor_data_t {
+struct __attribute__((packed)) sensor_data_ble_t {
     uint16_t company_id;
     uint8_t variant_id;
     uint32_t node_id;
@@ -50,9 +50,9 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice) override {
         if (advertisedDevice.haveManufacturerData()) {
             std::string recivedData = advertisedDevice.getManufacturerData();
-            if (recivedData.length() == sizeof(sensor_data_t)) {
-                sensor_data_t* expectedData =
-                    (sensor_data_t*)recivedData.data();
+            if (recivedData.length() == sizeof(sensor_data_ble_t)) {
+                sensor_data_ble_t* expectedData =
+                    (sensor_data_ble_t*)recivedData.data();
                 if (expectedData->company_id == 0xA1B1) {
                     switch (expectedData->variant_id) {
                         case 0x01:
