@@ -72,8 +72,10 @@ class MainCentralSensorManager {
         data->presence_main_central = presenceSensor.getPresence();
 
         data->shock_level_palette1 =
-            3.0;  // do ustalenia jak obliczamy poziom wstrząsu z danych akcelerometru palety
-        //data->shock_level_palette2 =
-            4.0;  // do ustalenia jak obliczamy poziom wstrząsu z danych akcelerometru palety
+            3.0;  // do ustalenia jak obliczamy poziom wstrząsu z danych
+                  // akcelerometru palety
+                  // data->shock_level_palette2 =
+        // 4.0;      do ustalenia jak obliczamy poziom wstrząsu z danych
+        // akcelerometru palety
     }
 };
