@@ -3,14 +3,14 @@
 #include "Sensor.h"
 #include <Arduino.h>
 
-class BLESecondarySensor : public Sensor {
+class BLESecondaryCentral : public Sensor {
    private:
     float temp;
     float hum;
     bool isClosed;
 
    public:
-    BLESecondarySensor() : temp(0.0), hum(0.0), isClosed(false) {}
+    BLESecondaryCentral() : temp(0.0), hum(0.0), isClosed(false) {}
 
     bool initialize() override {
         return true;
