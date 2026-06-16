@@ -6,9 +6,9 @@
 #include "SPIFFS.h"
 #include "MainCentralSensorManager.h"
 
-#define SIM_RX_PIN GPIO_NUM_16
+#define SIM_RX_PIN GPIO_NUM_18
 #define SIM_TX_PIN GPIO_NUM_17
-#define SIM_PWR_PIN GPIO_NUM_27
+#define SIM_PWR_PIN GPIO_NUM_6
 
 #define LED_PWR 10
 #define LED_STATUS 11
@@ -167,6 +167,7 @@ void setup() {
     digitalWrite(LED_USER, LOW);
 
     Serial.println("\n ----------- Rejestrator uruchomiony -----------");
+    centralSensorManager.initializeAllSensors();
 
     SPIFFSinit();
 
@@ -176,7 +177,7 @@ void setup() {
 
     data_service_init();
 
-    centralSensorManager.initializeAllSensors();
+
 
     BLEInit();
 
