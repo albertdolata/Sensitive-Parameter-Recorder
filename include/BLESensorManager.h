@@ -56,29 +56,26 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
                 if (expectedData->company_id == 0xA1B1) {
                     switch (expectedData->variant_id) {
                         case 0x01:
-                            switch (expectedData->node_id) {
-                                case expectedNodeId1:
-                                    palletSensor1->updateDataFromBLE(
-                                        expectedData->specific.accel.x,
-                                        expectedData->specific.accel.y,
-                                        expectedData->specific.accel.z,
-                                        expectedData->specific.accel
-                                            .motion_detected);
-                                    break;
-                                case expectedNodeId2:
-                                    palletSensor2->updateDataFromBLE(
-                                        expectedData->specific.accel.x,
-                                        expectedData->specific.accel.y,
-                                        expectedData->specific.accel.z,
-                                        expectedData->specific.accel
-                                            .motion_detected);
-                                    break;
-                                default:
-                                    Serial.printf(
-                                        "Nieznaleziono żadnego czujnika "
-                                        "paletowego z node_id: %X\n",
-                                        expectedData->node_id);
-                                    break;
+                            if (expectedData->node_id == expectedNodeId1) {
+                                palletSensor1->updateDataFromBLE(
+                                    expectedData->specific.accel.x,
+                                    expectedData->specific.accel.y,
+                                    expectedData->specific.accel.z,
+                                    expectedData->specific.accel
+                                        .motion_detected);
+                            } else if (expectedData->node_id ==
+                                       expectedNodeId2) {
+                                palletSensor2->updateDataFromBLE(
+                                    expectedData->specific.accel.x,
+                                    expectedData->specific.accel.y,
+                                    expectedData->specific.accel.z,
+                                    expectedData->specific.accel
+                                        .motion_detected);
+                            } else {
+                                Serial.printf(
+                                    "Nieznaleziono żadnego czujnika "
+                                    "paletowego z node_id: %X\n",
+                                    expectedData->node_id);
                             }
                             break;
                         case 0x02:
