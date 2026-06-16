@@ -25,10 +25,11 @@ typedef struct {
     float temperature_main_central;      /**< Temperatura w stopniach Celsjusza. */
     float humidity_main_central;         /**< Wilgotność względna w procentach. */
     float shock_level_main_central;     /**< Poziom wstrząsu, z akcelerometru. */
+    bool presence_main_central;        /**< Stan obecności, z czujnika obecności w centrali głównej. */
     //---Dane z centrali pomocniczej---
     float temperature_secondary_central;      /**< Temperatura w stopniach Celsjusza. */
     float humidity_secondary_central;         /**< Wilgotność względna w procentach. */
-    float shock_level_secondary_central;     /**< Poziom wstrząsu, z akcelerometru. */
+    bool is_closed_secondary_central;        /**< Stan zamknięcia, z czujnika drzwi w centrali pomocniczej. */
     //---Dane lokalizacyjne i sieciowe ---
     double latitude;         /**< Szerokość geograficzna, z gps. */
     double longitude;         /**< Długość geograficzna, z gps. */

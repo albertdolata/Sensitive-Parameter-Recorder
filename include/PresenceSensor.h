@@ -1,22 +1,25 @@
 #pragma once
+
 #include "Sensor.h"
 
 class PresenceSensor : public Sensor {
    private:
     bool isSomeOneHere;
+    uint8_t GPIO_pin;
+
 
    public:
-    PresenceSensor(String name) : Sensor(name) {}
+    PresenceSensor(uint8_t pin) : GPIO_pin(pin), isSomeOneHere(false) {}
 
     bool initialize() override {
+        pinMode(GPIO_pin, INPUT);
         return true;
     }
 
     void readData() override {
-        isSomeOneHere = random(0, 2);
-        value1 = isSomeOneHere;
-        if (isSomeOneHere)
-            Serial.printf("UWAGA! %s wykrył, że ktoś jest w naczepie! \n",
-                          sensorName.c_str());
+        isSomeOneHere = (digitalRead(GPIO_pin) == HIGH);
+    }
+    bool getPresence() const {
+        return isSomeOneHere;
     }
 };
