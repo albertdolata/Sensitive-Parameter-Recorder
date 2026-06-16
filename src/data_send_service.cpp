@@ -39,12 +39,13 @@ static void data_sender_task(void* pvParameters) {
                      "\"temp\":%.2f,"
                      "\"hum\":%.2f,"
                      "\"shock\":%.2f,"
+                     "\"presence\":%s,"
                      "\"time\":%lu"
                      "},"
                      "\"scent\":{"
                      "\"temp\":%.2f,"
                      "\"hum\":%.2f,"
-                     "\"shock\":%.2f"
+                     "\"is_closed\":%s"
                      "},"
                      "\"location\":{"
                      "\"latg\":%.6f,"
@@ -63,10 +64,11 @@ static void data_sender_task(void* pvParameters) {
                      incoming_data.temperature_main_central,
                      incoming_data.humidity_main_central,
                      incoming_data.shock_level_main_central,
+                     incoming_data.presence_main_central ? "true" : "false",
                      (unsigned long)incoming_data.timestamp,
                      incoming_data.temperature_secondary_central,
                      incoming_data.humidity_secondary_central,
-                     incoming_data.shock_level_secondary_central,
+                     incoming_data.is_closed_secondary_central ? "true" : "false",
                      incoming_data.latitude, incoming_data.longitude,
                      incoming_data.shock_level_palette1,
                      incoming_data.cell_info.mcc, incoming_data.cell_info.mnc,
