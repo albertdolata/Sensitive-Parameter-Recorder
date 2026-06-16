@@ -10,6 +10,10 @@
 #define SIM_TX_PIN GPIO_NUM_17
 #define SIM_PWR_PIN GPIO_NUM_27
 
+#define LED_PWR 10
+#define LED_STATUS 11
+#define LED_USER 12
+
 #define PRESENCE_SENSOR_PIN 14
 #define ACCEL_SENSOR_I2C_ADDR 0x18
 #define PALLET_NODE_ID_1 0x01
@@ -153,6 +157,15 @@ void checkAndUpdateTime(GPSManager* gps, uint32_t* last_gps_time) {
 void setup() {
     Serial.begin(115200);
     delay(1000);
+
+    pinMode(LED_PWR, OUTPUT);
+    pinMode(LED_STATUS, OUTPUT);
+    pinMode(LED_USER, OUTPUT);
+
+    digitalWrite(LED_PWR, HIGH);
+    digitalWrite(LED_STATUS, LOW);
+    digitalWrite(LED_USER, LOW);
+
     Serial.println("\n ----------- Rejestrator uruchomiony -----------");
 
     SPIFFSinit();
@@ -178,8 +191,10 @@ void loop() {
     checkAndUpdateTime(&GPS, &last_gps_time);
 
     Serial.println("\n ------- Nasłuch BLE -------");
+    digitalWrite(LED_USER, HIGH);
     BLEScanResults foundDevices = pBLEScan->start(6, false);
     pBLEScan->clearResults();
+    digitalWrite(LED_USER, LOW);
 
     Serial.println("\n ------- Odczyt z czujników -------");
     centralSensorManager.readAllSensorsData();
@@ -188,7 +203,9 @@ void loop() {
     assignSimComDataToStruct(&current_data, &GPS);
 
     Serial.println("\n ------- Wysyłka danych -------");
+    digitalWrite(LED_STATUS, HIGH);
     sendDataToServer(&current_data);
+    digitalWrite(LED_STATUS, LOW);
 
     vTaskDelay(pdMS_TO_TICKS(5000));
 }
