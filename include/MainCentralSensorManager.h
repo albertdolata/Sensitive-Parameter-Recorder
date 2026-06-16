@@ -61,9 +61,9 @@ class MainCentralSensorManager {
     void fillSensorData(sensor_data_t* data) {
         data->temperature_main_central = mainEnvSensor.getTemperature();
         data->humidity_main_central = mainEnvSensor.getHumidity();
-        data->shock_level_main_central =
-            1.0;  // mainAccelSensor.getShockLevel(); do ustalenia jak obliczamy
-                  // poziom wstrząsu z danych akcelerometru
+        data->accelx_main_central = mainAccelSensor.getAxisX();
+        data->accely_main_central = mainAccelSensor.getAxisY();
+        data->accelz_main_central = mainAccelSensor.getAxisZ();
 
         data->temperature_secondary_central = secondaryCentral.getTemp();
         data->humidity_secondary_central = secondaryCentral.getHumidity();
@@ -71,11 +71,8 @@ class MainCentralSensorManager {
         data->is_closed_secondary_central = secondaryCentral.getIsClosed();
         data->presence_main_central = presenceSensor.getPresence();
 
-        data->shock_level_palette1 =
-            3.0;  // do ustalenia jak obliczamy poziom wstrząsu z danych
-                  // akcelerometru palety
-                  // data->shock_level_palette2 =
-        // 4.0;      do ustalenia jak obliczamy poziom wstrząsu z danych
-        // akcelerometru palety
+        data->accelx_palette1 = palletSensor1.getAxisX();
+        data->accely_palette1 = palletSensor1.getAxisY();
+        data->accelz_palette1 = palletSensor1.getAxisZ();
     }
 };
