@@ -7,9 +7,9 @@
 #include <string.h>
 #include <stdio.h>
 #include "freertos/event_groups.h"
+#include "Arduino.h"
 
-
-#define SIM_UART_PORT UART_NUM_2
+#define SIM_UART_PORT UART_NUM_1
 #define BUF_SIZE 1024
 
 #define AT_BIT_OK BIT0
@@ -65,7 +65,7 @@ bool sim7000_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
         gpio_set_level(pwr_pin, 0);
 
         uart_config_t uart_config = {
-            .baud_rate = 19200,
+            .baud_rate = 115200,
             .data_bits = UART_DATA_8_BITS,
             .parity    = UART_PARITY_DISABLE,
             .stop_bits = UART_STOP_BITS_1,
@@ -84,55 +84,65 @@ bool sim7000_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
         hw_initialized = true;
     }
 
-       char rx_buf[BUF_SIZE];
+     char rx_buf[BUF_SIZE];
     bool is_alive = false;
     const int max_retries = 3;
 
+    // KROK A: Sprawdźmy, czy modem już przypadkiem nie działa (Auto-Bauding sync)
+    ESP_LOGI(TAG, "Sprawdzam, czy modem już jest uruchomiony...");
+    for (int i = 0; i < 3; i++) {
+        uart_flush_input(SIM_UART_PORT);
+        if (send_at_cmd("AT\r\n", rx_buf, sizeof(rx_buf), 500) > 0 && strstr(rx_buf, "OK")) {
+            is_alive = true;
+            ESP_LOGI(TAG, "Modem już żyje! Pomijam stacyjkę.");
+            break;
+        }
+        delay(100);
+    }
+
+    // KROK B: Jeśli milczy, odpalamy sekwencję sprzętową dla tranzystora NPN
+    if (!is_alive) {
         for (int attempt = 1; attempt <= max_retries; ++attempt) {
-        ESP_LOGI(TAG, "Próba sprzętowego uruchomienia modemu %d/%d...", attempt, max_retries);
+            ESP_LOGI(TAG, "Próba sprzętowego uruchomienia %d/%d...", attempt, max_retries);
             
+            // Prawidłowy Active HIGH pulse
             gpio_set_level(pwr_pin, 1);
-        vTaskDelay(pdMS_TO_TICKS(2000));
+            delay(1500); 
             gpio_set_level(pwr_pin, 0);
-        vTaskDelay(pdMS_TO_TICKS(3000));
             
+            ESP_LOGI(TAG, "Czekam 5s na bootowanie...");
+            delay(5000); 
+            
+            // Synchronizacja Auto-Bauding
             for (int i = 0; i < 5; i++) {
                 uart_flush_input(SIM_UART_PORT); 
-            
                 if (send_at_cmd("AT\r\n", rx_buf, sizeof(rx_buf), 500) > 0 && strstr(rx_buf, "OK")) {
                     is_alive = true;
                     break;
                 }
-                vTaskDelay(pdMS_TO_TICKS(500));
+                delay(500);
             }
 
             if (is_alive) {
-            ESP_LOGI(TAG, "Modem odpowiada (AT -> OK). Synchronizacja udana.");
-            break; 
-            } else {
-            ESP_LOGE(TAG, "Brak odpowiedzi na port UART. Ponawiam Power Sequence...");
+                ESP_LOGI(TAG, "Modem odpowiedział (AT -> OK). Synchronizacja udana.");
+                break; 
+            }
         }
     }
-
-    if (!is_alive) {
-        ESP_LOGE(TAG, "FATAL ERROR: Baseband nie odpowiada po %d cyklach power-on.", max_retries);
-        return false; 
-    }
-
     send_at_cmd("ATE0\r\n", rx_buf, sizeof(rx_buf), 500);
 
     send_at_cmd("AT+CFUN=0\r\n", rx_buf, sizeof(rx_buf), 5000);
 
     send_at_cmd("AT+CNMP=38\r\n", rx_buf, sizeof(rx_buf), 2000);
 
-    send_at_cmd("AT+CMNB=1\r\n", rx_buf, sizeof(rx_buf), 2000);
+    send_at_cmd("AT+CMNB=2\r\n", rx_buf, sizeof(rx_buf), 2000);
 
     send_at_cmd("AT+CGDCONT=1,\"IP\",\"iot\"\r\n", rx_buf, sizeof(rx_buf), 2000);
 
     send_at_cmd("AT+CFUN=1\r\n", rx_buf, sizeof(rx_buf), 10000);
     
     ESP_LOGI(TAG, "Oczekiwanie na inicjalizację karty SIM...");
-    vTaskDelay(pdMS_TO_TICKS(3000));
+    vTaskDelay(pdMS_TO_TICKS(50000));
 
     send_at_cmd("AT+CEREG=2\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+CREG=2\r\n", rx_buf, sizeof(rx_buf), 500);
