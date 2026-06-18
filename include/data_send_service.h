@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "sim7000_core.h"
+#include "sim7070_core.h"
 
 #ifdef __cplusplus
 extern "C" {

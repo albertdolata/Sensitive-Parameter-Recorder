@@ -6,7 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "sim7000_core.h"
+#include "sim7070_core.h"
 
 static const char* TAG = "DATA_SERVICE";
 static QueueHandle_t data_queue = NULL;
@@ -18,13 +18,13 @@ static void data_sender_task(void* pvParameters) {
 
     while (1) {
         if (xQueuePeek(data_queue, &incoming_data, portMAX_DELAY)) {
-            if (!sim7000_wait_for_network()) {
+            if (!sim7070_wait_for_network()) {
                 vTaskDelay(pdMS_TO_TICKS(5000));
                 continue;
             }
 
             if (!mqtt_connected) {
-                if (sim7000_mqtt_connect()) {
+                if (sim7070_mqtt_connect()) {
                     mqtt_connected = true;
                 } else {
                     ESP_LOGW(TAG, "Błąd negocjacji MQTT. Ponowienie za 5s.");
@@ -84,7 +84,7 @@ static void data_sender_task(void* pvParameters) {
 
             ESP_LOGI(TAG, "Próba wysyłki: %s", json_buffer);
 
-            if (sim7000_mqtt_send("dom/czujnik1", json_buffer)) {
+            if (sim7070_mqtt_send("dom/czujnik1", json_buffer)) {
                 ESP_LOGI(TAG, "Pakiet wysłany pomyślnie.");
                 xQueueReceive(data_queue, &incoming_data, 0);
             } else {
