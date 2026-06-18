@@ -84,7 +84,7 @@ static void data_sender_task(void* pvParameters) {
 
             ESP_LOGI(TAG, "Próba wysyłki: %s", json_buffer);
 
-            if (sim7070_mqtt_send("dom/czujnik1", json_buffer)) {
+            if (sim7070_mqtt_send("test/truck1", json_buffer)) {
                 ESP_LOGI(TAG, "Pakiet wysłany pomyślnie.");
                 xQueueReceive(data_queue, &incoming_data, 0);
             } else {
@@ -97,7 +97,7 @@ static void data_sender_task(void* pvParameters) {
 }
 void data_service_init(void) {
     data_queue = xQueueCreate(10, sizeof(sensor_data_t));
-    xTaskCreate(data_sender_task, "data_sender_task", 4096, NULL, 5, NULL);
+    xTaskCreate(data_sender_task, "data_sender_task", 8192, NULL, 5, NULL);
 }
 
 bool data_service_push(sensor_data_t* data) {
