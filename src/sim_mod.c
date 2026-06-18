@@ -1,4 +1,5 @@
-#include "sim7000_core.h"
+#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
+#include "sim7070_core.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -7,22 +8,27 @@
 #include <string.h>
 #include <stdio.h>
 #include "freertos/event_groups.h"
-#include "Arduino.h"
+#include "freertos/semphr.h"
 
-#define SIM_UART_PORT UART_NUM_1
+#define SIM_UART_PORT UART_NUM_2
 #define BUF_SIZE 1024
 
 #define AT_BIT_OK BIT0
 #define AT_BIT_ERROR BIT1
 #define AT_BIT_PROMPT BIT2
 
+static SemaphoreHandle_t at_mutex = NULL;
 static QueueHandle_t uart_queue;
 static EventGroupHandle_t at_event_group;
 static char fsm_rx_buffer[BUF_SIZE];
 static volatile int fsm_rx_idx = 0;
-static const char *TAG = "SIM7000";
+static const char *TAG = "SIM7070_GPRS";
+
+static void sim7070_uart_event_task(void *pvParameters);
 
 int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_ms) {
+    if (at_mutex != NULL) xSemaphoreTake(at_mutex, portMAX_DELAY);
+
     xEventGroupClearBits(at_event_group, AT_BIT_OK | AT_BIT_ERROR | AT_BIT_PROMPT);
     fsm_rx_idx = 0;
     memset(fsm_rx_buffer, 0, BUF_SIZE);
@@ -41,157 +47,163 @@ int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_
     }
 
     if (bits & AT_BIT_OK) {
+        if (at_mutex != NULL) xSemaphoreGive(at_mutex);
         return len;
     } else if (bits & AT_BIT_ERROR) {
         ESP_LOGE(TAG, "Błąd z modemu (ERROR) dla: %s", cmd);
+        if (at_mutex != NULL) xSemaphoreGive(at_mutex);
         return -1;
     } else {
         ESP_LOGE(TAG, "Timeout komendy: %s", cmd);
+        if (at_mutex != NULL) xSemaphoreGive(at_mutex);
         return 0;
     }
 }
 
-bool sim7000_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
-
+bool sim7070_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
     static bool hw_initialized = false;
     if (!hw_initialized) {
-        gpio_config_t io_conf = {};
-        io_conf.intr_type = GPIO_INTR_DISABLE;
-        io_conf.mode = GPIO_MODE_OUTPUT;
+        gpio_config_t io_conf = {}; // Wyzerowanie struktury
         io_conf.pin_bit_mask = (1ULL << pwr_pin);
-        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        io_conf.mode = GPIO_MODE_OUTPUT;
         io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        io_conf.intr_type = GPIO_INTR_DISABLE;
         gpio_config(&io_conf);
         gpio_set_level(pwr_pin, 0);
 
         uart_config_t uart_config = {
-            .baud_rate = 115200,
+            .baud_rate = 115200, // Rekomendowany baudrate dla SIM7070
             .data_bits = UART_DATA_8_BITS,
             .parity    = UART_PARITY_DISABLE,
             .stop_bits = UART_STOP_BITS_1,
             .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
             .rx_flow_ctrl_thresh = 0,
             .source_clk = UART_SCLK_APB,
-            //.flags = {}
         };
 
         ESP_ERROR_CHECK(uart_param_config(SIM_UART_PORT, &uart_config));
         ESP_ERROR_CHECK(uart_set_pin(SIM_UART_PORT, (int)tx_pin, (int)rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
         ESP_ERROR_CHECK(uart_driver_install(SIM_UART_PORT, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart_queue, 0));
         at_event_group = xEventGroupCreate();
-        xTaskCreate(sim7000_uart_event_task, "sim_rx_task", 4096, NULL, 12, NULL);
+        at_mutex = xSemaphoreCreateMutex();
+        xTaskCreate(sim7070_uart_event_task, "sim_rx_task", 4096, NULL, 12, NULL);
         
         hw_initialized = true;
     }
 
-     char rx_buf[BUF_SIZE];
+    char rx_buf[BUF_SIZE];
     bool is_alive = false;
     const int max_retries = 3;
 
-    // KROK A: Sprawdźmy, czy modem już przypadkiem nie działa (Auto-Bauding sync)
-    ESP_LOGI(TAG, "Sprawdzam, czy modem już jest uruchomiony...");
-    for (int i = 0; i < 3; i++) {
-        uart_flush_input(SIM_UART_PORT);
-        if (send_at_cmd("AT\r\n", rx_buf, sizeof(rx_buf), 500) > 0 && strstr(rx_buf, "OK")) {
-            is_alive = true;
-            ESP_LOGI(TAG, "Modem już żyje! Pomijam stacyjkę.");
-            break;
+    for (int attempt = 1; attempt <= max_retries; ++attempt) {
+        ESP_LOGI(TAG, "Próba sprzętowego uruchomienia modemu %d/%d...", attempt, max_retries);
+        
+        gpio_set_level(pwr_pin, 1);
+        vTaskDelay(pdMS_TO_TICKS(1000)); // SIM7070 wymaga ~1s PWRKEY
+        gpio_set_level(pwr_pin, 0);
+        vTaskDelay(pdMS_TO_TICKS(4000));
+        
+        for (int i = 0; i < 10; i++) {
+            uart_flush_input(SIM_UART_PORT); 
+            if (send_at_cmd("AT\r\n", rx_buf, sizeof(rx_buf), 500) > 0 && strstr(rx_buf, "OK")) {
+                is_alive = true;
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(500));
         }
-        delay(100);
+
+        if (is_alive) {
+            ESP_LOGI(TAG, "Synchronizacja baudrate ustatkowana.");
+            break; 
+        }
     }
 
-    // KROK B: Jeśli milczy, odpalamy sekwencję sprzętową dla tranzystora NPN
     if (!is_alive) {
-        for (int attempt = 1; attempt <= max_retries; ++attempt) {
-            ESP_LOGI(TAG, "Próba sprzętowego uruchomienia %d/%d...", attempt, max_retries);
-            
-            // Prawidłowy Active HIGH pulse
-            gpio_set_level(pwr_pin, 1);
-            delay(1500); 
-            gpio_set_level(pwr_pin, 0);
-            
-            ESP_LOGI(TAG, "Czekam 5s na bootowanie...");
-            delay(5000); 
-            
-            // Synchronizacja Auto-Bauding
-            for (int i = 0; i < 5; i++) {
-                uart_flush_input(SIM_UART_PORT); 
-                if (send_at_cmd("AT\r\n", rx_buf, sizeof(rx_buf), 500) > 0 && strstr(rx_buf, "OK")) {
-                    is_alive = true;
-                    break;
-                }
-                delay(500);
-            }
-
-            if (is_alive) {
-                ESP_LOGI(TAG, "Modem odpowiedział (AT -> OK). Synchronizacja udana.");
-                break; 
-            }
-        }
+        ESP_LOGE(TAG, "FATAL ERROR: Baseband nie odpowiada.");
+        return false; 
     }
-    send_at_cmd("ATE0\r\n", rx_buf, sizeof(rx_buf), 500);
 
+    send_at_cmd("ATE0\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+CFUN=0\r\n", rx_buf, sizeof(rx_buf), 5000);
 
-    send_at_cmd("AT+CNMP=38\r\n", rx_buf, sizeof(rx_buf), 2000);
-
-    send_at_cmd("AT+CMNB=2\r\n", rx_buf, sizeof(rx_buf), 2000);
-
-    send_at_cmd("AT+CGDCONT=1,\"IP\",\"iot\"\r\n", rx_buf, sizeof(rx_buf), 2000);
+    // Konfiguracja RAN - Wymuszenie GSM (GPRS/EDGE)
+    send_at_cmd("AT+CNMP=13\r\n", rx_buf, sizeof(rx_buf), 2000);
+    
+    // Konfiguracja App Network dla kontekstu 0 (IPv4, APN: "internet")
+    send_at_cmd("AT+CNCFG=0,1,\"internet\"\r\n", rx_buf, sizeof(rx_buf), 2000);
 
     send_at_cmd("AT+CFUN=1\r\n", rx_buf, sizeof(rx_buf), 10000);
     
-    ESP_LOGI(TAG, "Oczekiwanie na inicjalizację karty SIM...");
-    vTaskDelay(pdMS_TO_TICKS(50000));
+    ESP_LOGI(TAG, "Rozruch RF...");
+    vTaskDelay(pdMS_TO_TICKS(3000));
 
-    send_at_cmd("AT+CEREG=2\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+CREG=2\r\n", rx_buf, sizeof(rx_buf), 500);
+    send_at_cmd("AT+CGREG=2\r\n", rx_buf, sizeof(rx_buf), 500); // GPRS network registration status
 
     return true;
 }
 
-bool sim7000_wait_for_network(void) {
+bool sim7070_wait_for_network(void) {
     char rx_buf[BUF_SIZE];
-    for (int i = 0; i < 150; i++) { // Zwiększony timeout do 45s (NB-IoT/LTE-M bywa wolne)
-        send_at_cmd("AT+CEREG?\r\n", rx_buf, sizeof(rx_buf), 1000);
-        if (strstr(rx_buf, ",1") || strstr(rx_buf, ",5")) {
-            ESP_LOGI(TAG, "Zarejestrowano w sieci!");
-            return true;
+    ESP_LOGI(TAG, "Oczekiwanie na rejestrację w sieci (max 60s)...");
+    
+    for (int i = 0; i < 180; i++) {
+        // Wysyłamy zapytanie o status rejestracji
+        if (send_at_cmd("AT+CREG?\r\n", rx_buf, sizeof(rx_buf), 1000) > 0) {
+            
+            // USUŃ BIAŁE ZNAKI DLA CZYTELNOŚCI LOGA
+            char* ptr = rx_buf;
+            while (*ptr) { if (*ptr == '\r' || *ptr == '\n') *ptr = ' '; ptr++; }
+            
+            // WYDRUKUJ TO, CO ODPOWIEDZIAŁA SIEĆ
+            ESP_LOGI(TAG, "Status CREG [%d/60]: %s", i+1, rx_buf);
+            
+            if (strstr(rx_buf, ",1") || strstr(rx_buf, ",5")) {
+                ESP_LOGI(TAG, "SUKCES! Zarejestrowano w sieci GSM.");
+                return true;
+            } 
         }
-        if(i==31){
+        
+        if (i % 10 == 0 && i > 0) {
             send_at_cmd("AT+CPSI?\r\n", rx_buf, sizeof(rx_buf), 1000);
+            ESP_LOGI(TAG, "Parametry stacji (CPSI): %s", rx_buf);
         }
-
+        
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
+    
+    ESP_LOGE(TAG, "Przekroczono czas. Sieć odrzuciła kartę.");
     return false;
-}  
+}
 
-bool sim7000_mqtt_connect(void) {
+bool sim7070_mqtt_connect(void) {
     char rx_buf[BUF_SIZE];
     
     send_at_cmd("AT+SMDISC\r\n", rx_buf, sizeof(rx_buf), 500);
-    send_at_cmd("AT+CNACT=0\r\n", rx_buf, sizeof(rx_buf), 500);
+    // Dezaktywacja i ponowna aktywacja kontekstu PDP 0
+    send_at_cmd("AT+CNACT=0,0\r\n", rx_buf, sizeof(rx_buf), 2000);
 
-    send_at_cmd("AT+SMCONF=\"URL\",\"igel-kamil.ddns.net\",1883\r\n", rx_buf, sizeof(rx_buf), 1000);
+    send_at_cmd("AT+SMCONF=\"URL\",\"broker.hivemq.com\",1883\r\n", rx_buf, sizeof(rx_buf), 1000);
     send_at_cmd("AT+SMCONF=\"KEEPTIME\",60\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+SMCONF=\"CLEANSS\",1\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+SMCONF=\"CLIENTID\",\"esp32_p_komp\"\r\n", rx_buf, sizeof(rx_buf), 1000);
 
-    send_at_cmd("AT+CNACT=1,\"iot\"\r\n", rx_buf, sizeof(rx_buf), 10000);
-    
+    // Aktywacja kontekstu PDP dla SIM7070
+    send_at_cmd("AT+CNACT=0,1\r\n", rx_buf, sizeof(rx_buf), 10000);
     send_at_cmd("AT+CNACT?\r\n", rx_buf, sizeof(rx_buf), 1000);
-    send_at_cmd("AT+CDNSGIP=\"igel-kamil.ddns.net\"\r\n", rx_buf, sizeof(rx_buf), 1000);
 
-    ESP_LOGI(TAG, "Próba połączenia z domowym serwerem...");
+    ESP_LOGI(TAG, "Zestawianie tunelu TCP (MQTT)...");
     if (send_at_cmd("AT+SMCONN\r\n", rx_buf, sizeof(rx_buf), 20000) > 0 && strstr(rx_buf, "OK")) {
-        ESP_LOGI(TAG, "SUKCES! Połączono z Mosquitto.");
+        ESP_LOGI(TAG, "SUKCES! Połączono z brokerem.");
         return true;
     }
     return false;
 }
 
-bool sim7000_mqtt_send(const char *topic, const char *payload) {
+bool sim7070_mqtt_send(const char *topic, const char *payload) {
+    if (at_mutex != NULL) xSemaphoreTake(at_mutex, portMAX_DELAY);
+
     char cmd[300];
     snprintf(cmd, sizeof(cmd), "AT+SMPUB=\"%s\",%d,1,0\r\n", topic, (int)strlen(payload));
     
@@ -210,53 +222,54 @@ bool sim7000_mqtt_send(const char *topic, const char *payload) {
         bits = xEventGroupWaitBits(at_event_group, 
                                    AT_BIT_OK | AT_BIT_ERROR, 
                                    pdFALSE, pdFALSE, 
-                                   pdMS_TO_TICKS(10000));
+                                   pdMS_TO_TICKS(15000)); // GPRS może mieć wyższe opóźnienia
                                    
         if (bits & AT_BIT_OK) {
-            vTaskDelay(pdMS_TO_TICKS(1000)); 
+            if (at_mutex != NULL) xSemaphoreGive(at_mutex);
             return true;
         }
     }
+    if (at_mutex != NULL) xSemaphoreGive(at_mutex);
     return false;
 }
 
-cell_info_t sim7000_get_network_params(void) {
+cell_info_t sim7070_get_network_params(void) {
     cell_info_t info = {0, 0, 0, 0, false};
     char rx_buf[BUF_SIZE];
     
-    // 1. Sprawdź sygnał dla celów diagnostycznych
     send_at_cmd("AT+CSQ\r\n", rx_buf, sizeof(rx_buf), 1000);
     
-    // 2. Odpytanie o parametry komórki
     if (send_at_cmd("AT+CPSI?\r\n", rx_buf, sizeof(rx_buf), 2000) > 0) {
         char *cpsi_ptr = strstr(rx_buf, "+CPSI:");
         if (cpsi_ptr != NULL) {
             char sys_mode[16];
             char mcc_mnc[16];
             
-            // Parsowanie zgodnie ze strukturą SIM7000
+            // Format GSM w SIM7070: +CPSI: GSM,Online,260-01,0x1A2B,24523,...
+            // LAC (Location Area Code) jest na miejscu TAC
             if (sscanf(cpsi_ptr, "+CPSI: %15[^,],%*[^,],%15[^,],%lx,%lu", 
                        sys_mode, mcc_mnc, &info.tac, &info.cid) >= 4) {
                 
-                sscanf(mcc_mnc, "%hu-%hu", &info.mcc, &info.mnc);
-                info.is_valid = true;
+                if (strstr(sys_mode, "GSM") != NULL) {
+                    sscanf(mcc_mnc, "%hu-%hu", &info.mcc, &info.mnc);
+                    info.is_valid = true;
+                }
             }
         }
     }
     return info;
 }
 
-static void sim7000_uart_event_task(void *pvParameters) {
+static void sim7070_uart_event_task(void *pvParameters) {
     uart_event_t event;
     uint8_t* dtmp = (uint8_t*) malloc(BUF_SIZE);
 
     while (1) {
         if (xQueueReceive(uart_queue, (void *)&event, portMAX_DELAY)) {
             switch (event.type) {
-                
                 case UART_DATA: {
                     if (fsm_rx_idx + event.size >= BUF_SIZE) {
-                        ESP_LOGE(TAG, "FSM: Ring Buffer Overflow! Czyszczenie agregatora.");
+                        ESP_LOGE(TAG, "FSM: Ring Buffer Overflow!");
                         fsm_rx_idx = 0; 
                     }
 
@@ -277,29 +290,26 @@ static void sim7000_uart_event_task(void *pvParameters) {
                             xEventGroupSetBits(at_event_group, AT_BIT_PROMPT);
                             fsm_rx_idx = 0;
                         }
-                        
-                        else if (strstr(fsm_rx_buffer, "+CEREG: 0") || strstr(fsm_rx_buffer, "+CEREG: 4")) {
-                            ESP_LOGW(TAG, "URC: Awaria łącza radiowego (Baseband odrzucony)!");
+                        // Zmiana na CGREG dla sieci GPRS/EDGE
+                        else if (strstr(fsm_rx_buffer, "+CGREG: 0") || strstr(fsm_rx_buffer, "+CREG: 0")) {
+                            ESP_LOGW(TAG, "URC: Awaria łącza radiowego (odrzut z MSC/SGSN)!");
                             fsm_rx_idx = 0; 
                         }
                     }
                     break;
                 }
-
                 case UART_FIFO_OVF:
                     ESP_LOGE(TAG, "Hardware FIFO Overflow!");
                     uart_flush_input(SIM_UART_PORT);
                     xQueueReset(uart_queue);
                     fsm_rx_idx = 0;
                     break;
-
                 case UART_BUFFER_FULL:
                     ESP_LOGE(TAG, "Ring Buffer Full!");
                     uart_flush_input(SIM_UART_PORT);
                     xQueueReset(uart_queue);
                     fsm_rx_idx = 0;
                     break;
-                    
                 default:
                     break;
             }
