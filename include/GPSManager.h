@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#include "sim7000_core.h"
+#include "sim7070_core.h"
 
 class GPSManager {
    private:
@@ -59,7 +59,7 @@ class GPSManager {
 
     void begin() {
         char rx_buff[128];
-
+        
         send_at_cmd("AT+CGNSPWR=1\r\n", rx_buff, sizeof(rx_buff), 2000);
 
         Serial.println("[DEBUG] GPS pomyslnie zainicjowany.");
@@ -70,8 +70,26 @@ class GPSManager {
 
         if(send_at_cmd("AT+CGNSINF\r\n", rx_buff, sizeof(rx_buff), 2000) > 0) {
             String response(rx_buff);
+            Serial.print("[GNSS RAW] ");
+            Serial.println(response);
             parseResponse(response);
         }
+    }
+
+    void pause() {
+        if (!isON) return;
+        char rx_buff[128];
+        // Wyłączamy zasilanie GNSS - zwalniamy radio dla GSM
+        send_at_cmd("AT+CGNSPWR=0\r\n", rx_buff, sizeof(rx_buff), 2000);
+        Serial.println("[DEBUG] GPS spauzowany (oddano antene dla GPRS).");
+    }
+
+    void resume() {
+        if (!isON) return;
+        char rx_buff[128];
+        // Włączamy zasilanie GNSS ponownie
+        send_at_cmd("AT+CGNSPWR=1\r\n", rx_buff, sizeof(rx_buff), 2000);
+        Serial.println("[DEBUG] GPS wznowiony (szukanie satelitow).");
     }
 
     double getLatitude() {
