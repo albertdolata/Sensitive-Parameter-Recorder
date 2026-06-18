@@ -6,6 +6,8 @@
 #include "SPIFFS.h"
 #include "MainCentralSensorManager.h"
 
+#include "esp_log.h"
+
 #define SIM_RX_PIN GPIO_NUM_18
 #define SIM_TX_PIN GPIO_NUM_17
 #define SIM_PWR_PIN GPIO_NUM_6
@@ -21,9 +23,8 @@
 
 MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN, ACCEL_SENSOR_I2C_ADDR, PALLET_NODE_ID_1, PALLET_NODE_ID_2);
 
-BLEScan* pBLEScan;
+BLEScan* pBLEScan; 
 GPSManager GPS;
-
 
 void setESP32Time(uint32_t timestamp) {
     struct timeval tv;
@@ -106,9 +107,9 @@ void sendBackupData() {
 }
 
 void assignSimComDataToStruct(sensor_data_t* data, GPSManager* gps) {
-    data->cell_info = sim7000_get_network_params();
-    data->latitude = gps->getLatitude();
-    data->longitude = gps->getLongitude();
+    data->cell_info = sim7070_get_network_params();
+   // data->latitude = gps->getLatitude();
+   // data->longitude = gps->getLongitude();
     // narazie nie ma tych czujników, ale zostawiam miejsce w strukturze i
     // kodzie, żeby łatwo było dodać w przyszłości
     // data->shock_level_palette2 = sensors[2]->value1;
@@ -117,12 +118,12 @@ void assignSimComDataToStruct(sensor_data_t* data, GPSManager* gps) {
 }
 
 void SIMComInit() {
-    if (!sim7000_init(SIM_RX_PIN, SIM_TX_PIN, SIM_PWR_PIN)) {
-        Serial.println("Błąd inicjalizacji modemu SIM7000. Restartowanie...");
+    if (!sim7070_init(SIM_RX_PIN, SIM_TX_PIN, SIM_PWR_PIN)) {
+        Serial.println("Błąd inicjalizacji modemu SIM7070. Restartowanie...");
         ESP.restart();
     }
 
-    if (!sim7000_wait_for_network()) {
+    if (!sim7070_wait_for_network()) {
         Serial.println("Nie można połączyć z siecią. Restartowanie...");
         ESP.restart();
     }
@@ -156,6 +157,8 @@ void checkAndUpdateTime(GPSManager* gps, uint32_t* last_gps_time) {
 
 void setup() {
     Serial.begin(115200);
+    esp_log_level_set("*", ESP_LOG_INFO); 
+    esp_log_level_set("SIM7070_GPRS", ESP_LOG_DEBUG);
     delay(1000);
 
     pinMode(LED_PWR, OUTPUT);
@@ -173,23 +176,20 @@ void setup() {
 
     SIMComInit();
 
-    GPS.begin();
+    //GPS.begin();
 
     data_service_init();
 
-
-
     BLEInit();
-
 }
 
 void loop() {
     sensor_data_t current_data = {0};
     static uint32_t last_gps_time = 0;
 
-    GPS.update();
+    //GPS.update();
     
-    checkAndUpdateTime(&GPS, &last_gps_time);
+    //checkAndUpdateTime(&GPS, &last_gps_time);
 
     Serial.println("\n ------- Nasłuch BLE -------");
     digitalWrite(LED_USER, HIGH);
@@ -202,11 +202,10 @@ void loop() {
     centralSensorManager.fillSensorData(&current_data);
     
     assignSimComDataToStruct(&current_data, &GPS);
-
+    
     Serial.println("\n ------- Wysyłka danych -------");
     digitalWrite(LED_STATUS, HIGH);
     sendDataToServer(&current_data);
     digitalWrite(LED_STATUS, LOW);
-
     vTaskDelay(pdMS_TO_TICKS(5000));
 }
