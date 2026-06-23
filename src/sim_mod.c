@@ -181,17 +181,37 @@ bool sim7070_mqtt_connect(void) {
     char rx_buf[BUF_SIZE];
     
     send_at_cmd("AT+SMDISC\r\n", rx_buf, sizeof(rx_buf), 500);
-    // Dezaktywacja i ponowna aktywacja kontekstu PDP 0
     send_at_cmd("AT+CNACT=0,0\r\n", rx_buf, sizeof(rx_buf), 2000);
+    send_at_cmd("AT+CNCFG=0,1,\"internet\"\r\n", rx_buf, sizeof(rx_buf), 2000);
 
+    if (send_at_cmd("AT+CNACT=0,1\r\n", rx_buf, sizeof(rx_buf), 10000) <= 0 || !strstr(rx_buf, "OK")) {
+        ESP_LOGE(TAG, "Blad aktywacji kontekstu PDP.");
+        return false; 
+    }
+
+    ESP_LOGI(TAG, "Oczekiwanie na adres IP z sieci...");
+    bool pdp_active = false;
+    for(int i=0; i<10; i++) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        send_at_cmd("AT+CNACT?\r\n", rx_buf, sizeof(rx_buf), 2000);
+        
+        if(strstr(rx_buf, "+CNACT: 0,1") || strstr(rx_buf, "ACTIVE")) {
+            pdp_active = true;
+            ESP_LOGI(TAG, "Adres IP przyznany pomyślnie!");
+            break;
+        }
+    }
+
+    if(!pdp_active) {
+        ESP_LOGE(TAG, "Timeout: Siec nie przydzielila adresu IP. Zamykanie sesji.");
+        send_at_cmd("AT+CNACT=0,0\r\n", rx_buf, sizeof(rx_buf), 2000);
+        return false;
+    }
+   
     send_at_cmd("AT+SMCONF=\"URL\",\"broker.hivemq.com\",1883\r\n", rx_buf, sizeof(rx_buf), 1000);
     send_at_cmd("AT+SMCONF=\"KEEPTIME\",60\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+SMCONF=\"CLEANSS\",1\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+SMCONF=\"CLIENTID\",\"esp32_p_komp\"\r\n", rx_buf, sizeof(rx_buf), 1000);
-
-    // Aktywacja kontekstu PDP dla SIM7070
-    send_at_cmd("AT+CNACT=0,1\r\n", rx_buf, sizeof(rx_buf), 10000);
-    send_at_cmd("AT+CNACT?\r\n", rx_buf, sizeof(rx_buf), 1000);
 
     ESP_LOGI(TAG, "Zestawianie tunelu TCP (MQTT)...");
     if (send_at_cmd("AT+SMCONN\r\n", rx_buf, sizeof(rx_buf), 20000) > 0 && strstr(rx_buf, "OK")) {
@@ -199,6 +219,12 @@ bool sim7070_mqtt_connect(void) {
         return true;
     }
     return false;
+}
+
+void sim7070_mqtt_disconnect(void) {
+    char rx_buf[128];
+    send_at_cmd("AT+SMDISC\r\n", rx_buf, sizeof(rx_buf), 2000);
+    send_at_cmd("AT+CNACT=0,0\r\n", rx_buf, sizeof(rx_buf), 2000);
 }
 
 bool sim7070_mqtt_send(const char *topic, const char *payload) {

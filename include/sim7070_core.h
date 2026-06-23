@@ -98,6 +98,8 @@ bool sim7070_mqtt_connect(void);
  */
 int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_ms);
 
+void sim7070_mqtt_disconnect(void);
+
 #ifdef __cplusplus
 
 

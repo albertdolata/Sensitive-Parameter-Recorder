@@ -92,9 +92,16 @@ static void data_sender_task(void* pvParameters) {
                 mqtt_connected = false;
                 vTaskDelay(pdMS_TO_TICKS(5000));
             }
+
+            if (uxQueueMessagesWaiting(data_queue) == 0 && mqtt_connected) {
+                ESP_LOGI(TAG, "Kolejka pusta. Zamykam polaczenie MQTT i tunel PDP przed oddaniem radia...");
+                sim7070_mqtt_disconnect(); 
+                mqtt_connected = false;
+            }
         }
     }
 }
+
 void data_service_init(void) {
     data_queue = xQueueCreate(10, sizeof(sensor_data_t));
     xTaskCreate(data_sender_task, "data_sender_task", 8192, NULL, 5, NULL);
@@ -103,4 +110,9 @@ void data_service_init(void) {
 bool data_service_push(sensor_data_t* data) {
     if (data_queue == NULL) return false;
     return xQueueSend(data_queue, data, 0) == pdPASS;
+}
+
+bool data_service_is_busy(void) {
+    if (data_queue == NULL) return false;
+    return uxQueueMessagesWaiting(data_queue) > 0;
 }

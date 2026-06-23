@@ -68,6 +68,8 @@ void data_service_init(void);
  */
 bool data_service_push(sensor_data_t* data);
 
+bool data_service_is_busy(void);
+
 #ifdef __cplusplus
 }
 #endif
