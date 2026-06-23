@@ -18,13 +18,15 @@
 
 #define PRESENCE_SENSOR_PIN 14
 #define ACCEL_SENSOR_I2C_ADDR 0x18
-#define PALLET_NODE_ID_1 0x01
-#define PALLET_NODE_ID_2 0x02
+#define MAC_PALLETE_1 "d1:d2:e4:92:0e:c4"
+#define MAC_SECONDARY_CENTRAL "ca:37:e3:06:9b:84"
 
-MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN, ACCEL_SENSOR_I2C_ADDR, PALLET_NODE_ID_1, PALLET_NODE_ID_2);
+MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN, ACCEL_SENSOR_I2C_ADDR, MAC_PALLETE_1, MAC_SECONDARY_CENTRAL);
 
 BLEScan* pBLEScan; 
 GPSManager GPS;
+
+bool initial_fix_acquired = false;
 
 void setESP32Time(uint32_t timestamp) {
     struct timeval tv;
@@ -108,12 +110,8 @@ void sendBackupData() {
 
 void assignSimComDataToStruct(sensor_data_t* data, GPSManager* gps) {
     data->cell_info = sim7070_get_network_params();
-   // data->latitude = gps->getLatitude();
-   // data->longitude = gps->getLongitude();
-    // narazie nie ma tych czujników, ale zostawiam miejsce w strukturze i
-    // kodzie, żeby łatwo było dodać w przyszłości
-    // data->shock_level_palette2 = sensors[2]->value1;
-    // data->shock_level_palette3 = sensors[3]->value1;
+    data->latitude = gps->getLatitude();
+    data->longitude = gps->getLongitude();
     data->timestamp = time(NULL);
 }
 
@@ -151,7 +149,7 @@ void checkAndUpdateTime(GPSManager* gps, uint32_t* last_gps_time) {
     if (gps->hasFix() && gps->getTimestamp() != *last_gps_time) {
         setESP32Time(gps->getTimestamp());
         *last_gps_time = gps->getTimestamp();
-        Serial.println("Czas ESP32 zaktualizowany na podstawie GPS.");
+        Serial.println("Czas Centrali zaktualizowany na podstawie GPS.");
     }
 }
 
@@ -176,7 +174,7 @@ void setup() {
 
     SIMComInit();
 
-    //GPS.begin();
+    GPS.begin();
 
     data_service_init();
 
@@ -187,25 +185,50 @@ void loop() {
     sensor_data_t current_data = {0};
     static uint32_t last_gps_time = 0;
 
-    //GPS.update();
+    Serial.println("\n ===================================================");
     
-    //checkAndUpdateTime(&GPS, &last_gps_time);
+    if (!initial_fix_acquired) {
+        GPS.resume();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        
+        GPS.update();
+        if (GPS.hasFix()) {
+            Serial.println("Fix zdobyty.");
+            checkAndUpdateTime(&GPS, &last_gps_time);
+            assignSimComDataToStruct(&current_data, &GPS);
+            initial_fix_acquired = true;
+            
+            GPS.pause();
+            vTaskDelay(pdMS_TO_TICKS(2000)); 
+        } else {
+            Serial.println("Czekanie na fix.");
+        }
+    } 
+    else {
+        assignSimComDataToStruct(&current_data, &GPS); 
+    }
 
-    Serial.println("\n ------- Nasłuch BLE -------");
+    Serial.println(" ------- Odczyt BLE i Czujników -------");
     digitalWrite(LED_USER, HIGH);
     BLEScanResults foundDevices = pBLEScan->start(6, false);
     pBLEScan->clearResults();
     digitalWrite(LED_USER, LOW);
 
-    Serial.println("\n ------- Odczyt z czujników -------");
     centralSensorManager.readAllSensorsData();
     centralSensorManager.fillSensorData(&current_data);
-    
-    assignSimComDataToStruct(&current_data, &GPS);
-    
-    Serial.println("\n ------- Wysyłka danych -------");
+
+    Serial.println(" ------- Wysyłka / Zapis -------");
     digitalWrite(LED_STATUS, HIGH);
-    sendDataToServer(&current_data);
+    
+    sendDataToServer(&current_data); 
+    
+    if (initial_fix_acquired) {
+        while (data_service_is_busy()) {
+            Serial.println("Wysyłanie danych...");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+    }
+    
     digitalWrite(LED_STATUS, LOW);
     vTaskDelay(pdMS_TO_TICKS(5000));
 }
