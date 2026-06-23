@@ -6,7 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "sim7000_core.h"
+#include "sim7070_core.h"
 
 static const char* TAG = "DATA_SERVICE";
 static QueueHandle_t data_queue = NULL;
@@ -18,13 +18,13 @@ static void data_sender_task(void* pvParameters) {
 
     while (1) {
         if (xQueuePeek(data_queue, &incoming_data, portMAX_DELAY)) {
-            if (!sim7000_wait_for_network()) {
+            if (!sim7070_wait_for_network()) {
                 vTaskDelay(pdMS_TO_TICKS(5000));
                 continue;
             }
 
             if (!mqtt_connected) {
-                if (sim7000_mqtt_connect()) {
+                if (sim7070_mqtt_connect()) {
                     mqtt_connected = true;
                 } else {
                     ESP_LOGW(TAG, "Błąd negocjacji MQTT. Ponowienie za 5s.");
@@ -33,50 +33,58 @@ static void data_sender_task(void* pvParameters) {
                 }
             }
 
-            snprintf(json_buffer, sizeof(json_buffer),
-                     "{"
-                     "\"mcent\":{"
-                     "\"temp\":%.2f,"
-                     "\"hum\":%.2f,"
-                     "\"shock\":%.2f,"
-                     "\"presence\":%s,"
-                     "\"time\":%lu"
-                     "},"
-                     "\"scent\":{"
-                     "\"temp\":%.2f,"
-                     "\"hum\":%.2f,"
-                     "\"is_closed\":%s"
-                     "},"
-                     "\"location\":{"
-                     "\"latg\":%.6f,"
-                     "\"long\":%.6f"
-                     "},"
-                     "\"p1\":{"
-                     "\"shock\":%.2f"
-                     "},"
-                     "\"cell\":{"
-                     "\"mcc\":%u,"
-                     "\"mnc\":%u,"
-                     "\"tac\":%lu,"
-                     "\"cid\":%lu"
-                     "}"
-                     "}",
-                     incoming_data.temperature_main_central,
-                     incoming_data.humidity_main_central,
-                     incoming_data.shock_level_main_central,
-                     incoming_data.presence_main_central ? "true" : "false",
-                     (unsigned long)incoming_data.timestamp,
-                     incoming_data.temperature_secondary_central,
-                     incoming_data.humidity_secondary_central,
-                     incoming_data.is_closed_secondary_central ? "true" : "false",
-                     incoming_data.latitude, incoming_data.longitude,
-                     incoming_data.shock_level_palette1,
-                     incoming_data.cell_info.mcc, incoming_data.cell_info.mnc,
-                     incoming_data.cell_info.tac, incoming_data.cell_info.cid);
+            snprintf(
+                json_buffer, sizeof(json_buffer),
+                "{"
+                "\"mcent\":{"
+                "\"temp\":%.2f,"
+                "\"hum\":%.2f,"
+                "\"accelx\":%.2f,"
+                "\"accely\":%.2f,"
+                "\"accelz\":%.2f,"
+                "\"presence\":%s,"
+                "\"time\":%lu"
+                "},"
+                "\"scent\":{"
+                "\"temp\":%.2f,"
+                "\"hum\":%.2f,"
+                "\"is_closed\":%s"
+                "},"
+                "\"location\":{"
+                "\"latg\":%.6f,"
+                "\"long\":%.6f"
+                "},"
+                "\"p1\":{"
+                "\"p1x\":%.2f,"
+                "\"p1y\":%.2f,"
+                "\"p1z\":%.2f"
+                "},"
+                "\"cell\":{"
+                "\"mcc\":%u,"
+                "\"mnc\":%u,"
+                "\"tac\":%lu,"
+                "\"cid\":%lu"
+                "}"
+                "}",
+                incoming_data.temperature_main_central,
+                incoming_data.humidity_main_central,
+                incoming_data.accelx_main_central,
+                incoming_data.accely_main_central,
+                incoming_data.accelz_main_central,
+                incoming_data.presence_main_central ? "true" : "false",
+                (unsigned long)incoming_data.timestamp,
+                incoming_data.temperature_secondary_central,
+                incoming_data.humidity_secondary_central,
+                incoming_data.is_closed_secondary_central ? "true" : "false",
+                incoming_data.latitude, incoming_data.longitude,
+                incoming_data.accelx_palette1, incoming_data.accely_palette1,
+                incoming_data.accelz_palette1, incoming_data.cell_info.mcc,
+                incoming_data.cell_info.mnc, incoming_data.cell_info.tac,
+                incoming_data.cell_info.cid);
 
             ESP_LOGI(TAG, "Próba wysyłki: %s", json_buffer);
 
-            if (sim7000_mqtt_send("dom/czujnik1", json_buffer)) {
+            if (sim7070_mqtt_send("test/truck1", json_buffer)) {
                 ESP_LOGI(TAG, "Pakiet wysłany pomyślnie.");
                 xQueueReceive(data_queue, &incoming_data, 0);
             } else {
@@ -84,15 +92,27 @@ static void data_sender_task(void* pvParameters) {
                 mqtt_connected = false;
                 vTaskDelay(pdMS_TO_TICKS(5000));
             }
+
+            if (uxQueueMessagesWaiting(data_queue) == 0 && mqtt_connected) {
+                ESP_LOGI(TAG, "Kolejka pusta. Zamykam polaczenie MQTT i tunel PDP przed oddaniem radia...");
+                sim7070_mqtt_disconnect(); 
+                mqtt_connected = false;
+            }
         }
     }
 }
+
 void data_service_init(void) {
     data_queue = xQueueCreate(10, sizeof(sensor_data_t));
-    xTaskCreate(data_sender_task, "data_sender_task", 4096, NULL, 5, NULL);
+    xTaskCreate(data_sender_task, "data_sender_task", 8192, NULL, 5, NULL);
 }
 
 bool data_service_push(sensor_data_t* data) {
     if (data_queue == NULL) return false;
     return xQueueSend(data_queue, data, 0) == pdPASS;
+}
+
+bool data_service_is_busy(void) {
+    if (data_queue == NULL) return false;
+    return uxQueueMessagesWaiting(data_queue) > 0;
 }

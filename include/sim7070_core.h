@@ -39,7 +39,7 @@ typedef struct {
  * * @return true jeśli modem odpowiedział poprawnie na AT i przeszedł konfigurację (ATE0, CFUN, APN).
  * @note Funkcja blokująca (blocking) - całkowity timeout inicjalizacji może wynieść do 30s.
  */
-bool sim7000_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin);
+bool sim7070_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin);
 
 /**
  * @brief Pobiera parametry identyfikacjne ze stacji bazwoej do której aktualnie zalogowany jest moduł.
@@ -48,9 +48,9 @@ bool sim7000_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin);
  * * @return cell_info_t Struktura z danymi komórki.
  * Jeśli modem nie jest zalgowany, pole is_valid zostanie ustawione na false.
  * * @note Wymaga aktywnego Basebandu (modem nie może być w trybie Flight Mode - CFUN=0/4).
- * @see sim7000_wait_for_network
+ * @see sim7070_wait_for_network
  */
-cell_info_t sim7000_get_network_params(void);
+cell_info_t sim7070_get_network_params(void);
 
 /**
  * @brief Oczekuje na rejestracje w sieci LTE-M/NB-IoT.
@@ -58,7 +58,7 @@ cell_info_t sim7000_get_network_params(void);
  * Maksymalny czas oczekiwania to ok. 150 sekund.
  * * @return true jeśli status to 1 (registered, home network) lub 5 (registered, roaming)
  */
-bool sim7000_wait_for_network(void);
+bool sim7070_wait_for_network(void);
 
 /**
  * @brief Wysyła wiadomość MQTT na określony temat.
@@ -68,9 +68,9 @@ bool sim7000_wait_for_network(void);
  * * @param[in] topic Nazwa tematu (wykorzystujemy "dom/czujnik1").
  * @param[in] payload Treść wiadomości (string JSON).
  * * @return true jeśli wysyłka została potwierdzona przez broker.
- * @pre Wymaga aktywnego połączenia przez @ref sim7000_mqtt_connect.
+ * @pre Wymaga aktywnego połączenia przez @ref sim7070_mqtt_connect.
  */
-bool sim7000_mqtt_send(const char *topic, const char *payload);
+bool sim7070_mqtt_send(const char *topic, const char *payload);
 
 
 /**
@@ -79,7 +79,7 @@ bool sim7000_mqtt_send(const char *topic, const char *payload);
  * Aktywuje kontekst PDP komendą AT+CNACT.
  * @return true jeśli uzyskano IP oraz pomyślnie wykonano AT+SMCONN.
  */
-bool sim7000_mqtt_connect(void);
+bool sim7070_mqtt_connect(void);
 
 
 /**
@@ -88,7 +88,6 @@ bool sim7000_mqtt_connect(void);
  * i ustawia bity w Event Group @p at_event_group.
  * * @param[in] pvParameters parametr FreeRTOS (NULL).
  */
-static void sim7000_uart_event_task(void *pvParameters);
 
 /** @brief Wysyła komendę AT do modemu.
  * @param[in] cmd Komenda AT do wysłania.
@@ -98,6 +97,8 @@ static void sim7000_uart_event_task(void *pvParameters);
  * @return Liczba bajtów odebranych, lub -1 w przypadku błędu.
  */
 int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_ms);
+
+void sim7070_mqtt_disconnect(void);
 
 #ifdef __cplusplus
 
