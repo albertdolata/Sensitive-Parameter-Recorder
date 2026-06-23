@@ -31,66 +31,40 @@ struct __attribute__((packed)) sensor_data_ble_t {
 class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
    private:
     BLEPalletSensor* palletSensor1;
-    BLEPalletSensor* palletSensor2;
     BLESecondaryCentral* secondaryCentral;
-    uint32_t expectedNodeId1;
-    uint32_t expectedNodeId2;
+    std::string expectedMacPallet1;
+    std::string expectedMacSecondaryCentral;
 
    public:
     BLESensorManager(BLEPalletSensor* palletSensor1,
-                     BLEPalletSensor* palletSensor2,
-                     BLESecondaryCentral* secondaryCentral, uint32_t NodeId1,
-                     uint32_t NodeId2)
+                     BLESecondaryCentral* secondaryCentral,
+                     std::string PalletMACId1,
+                     std::string SecondaryCentralMACId)
         : palletSensor1(palletSensor1),
-          palletSensor2(palletSensor2),
           secondaryCentral(secondaryCentral),
-          expectedNodeId1(NodeId1),
-          expectedNodeId2(NodeId2) {}
+          expectedMacPallet1(PalletMACId1),
+          expectedMacSecondaryCentral(SecondaryCentralMACId) {}
 
     void onResult(BLEAdvertisedDevice advertisedDevice) override {
+        std::string deviceAddress = advertisedDevice.getAddress().toString();
         if (advertisedDevice.haveManufacturerData()) {
             std::string recivedData = advertisedDevice.getManufacturerData();
             if (recivedData.length() == sizeof(sensor_data_ble_t)) {
-                sensor_data_ble_t* expectedData =
+                sensor_data_ble_t* incomingData =
                     (sensor_data_ble_t*)recivedData.data();
-                if (expectedData->company_id == 0xA1B1) {
-                    switch (expectedData->variant_id) {
-                        case 0x01:
-                            if (expectedData->node_id == expectedNodeId1) {
-                                palletSensor1->updateDataFromBLE(
-                                    expectedData->specific.accel.x,
-                                    expectedData->specific.accel.y,
-                                    expectedData->specific.accel.z,
-                                    expectedData->specific.accel
-                                        .motion_detected);
-                            } else if (expectedData->node_id ==
-                                       expectedNodeId2) {
-                                palletSensor2->updateDataFromBLE(
-                                    expectedData->specific.accel.x,
-                                    expectedData->specific.accel.y,
-                                    expectedData->specific.accel.z,
-                                    expectedData->specific.accel
-                                        .motion_detected);
-                            } else {
-                                Serial.printf(
-                                    "Nieznaleziono żadnego czujnika "
-                                    "paletowego z node_id: %X\n",
-                                    expectedData->node_id);
-                            }
-                            break;
-                        case 0x02:
-                            secondaryCentral->updateDataFromBLE(
-                                expectedData->specific.env.temp,
-                                expectedData->specific.env.humid,
-                                expectedData->specific.env.is_closed);
-                            break;
-                        default:
-                            Serial.printf(
-                                "Nie wykryto czujnika paletowego ani centrali "
-                                "pomocnicznej: %X\n",
-                                expectedData->company_id);
-                            break;
-                    }
+                if (deviceAddress == expectedMacPallet1) {
+                    Serial.println("-------------------ZNALEZIONO DANE Z PALETY 1-------------------");
+                    palletSensor1->updateDataFromBLE(
+                        incomingData->specific.accel.x,
+                        incomingData->specific.accel.y,
+                        incomingData->specific.accel.z,
+                        incomingData->specific.accel.motion_detected);
+                } else if (deviceAddress == expectedMacSecondaryCentral) {
+                    Serial.println("-------------------ZNALEZIONO DANE Z DRUGIEJ CENTRALI-------------------");
+                    secondaryCentral->updateDataFromBLE(
+                        incomingData->specific.env.temp,
+                        incomingData->specific.env.humid,
+                        incomingData->specific.env.is_closed);
                 }
             }
         }
