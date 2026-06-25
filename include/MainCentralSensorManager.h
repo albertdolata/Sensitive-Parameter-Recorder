@@ -72,5 +72,6 @@ class MainCentralSensorManager {
         data->accelx_palette1 = palletSensor1.getAxisX();
         data->accely_palette1 = palletSensor1.getAxisY();
         data->accelz_palette1 = palletSensor1.getAxisZ();
+        data->motion_detected_p1 = (palletSensor1.isMotionDetected() == true);
     }
 };
