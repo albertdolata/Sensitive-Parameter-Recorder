@@ -9,6 +9,7 @@ class GPSManager {
     double longitude;
     uint32_t timestamp;
     bool isON;
+    bool fixStatus;
 
     void parseTime(String rawTime) {
         if (rawTime.length() >= 14) {
@@ -34,7 +35,7 @@ class GPSManager {
             commaCounter = response.indexOf(',');
             int nextComma = response.indexOf(',', commaCounter + 1);
             if (response.substring(commaCounter + 1, nextComma) == "1") {
-                isON = true;
+                fixStatus = true;
                 commaCounter = nextComma;
                 nextComma = response.indexOf(',', commaCounter + 1);
                 rawTime = response.substring(commaCounter + 1, nextComma);
@@ -49,29 +50,28 @@ class GPSManager {
                 longitude = rawLongitude.toDouble();
                 parseTime(rawTime);
             } else {
-                isON = false;
+                fixStatus = false;
             }
         }
     }
     
    public:
-    GPSManager() : latitude(0.0), longitude(0.0), isON(false) {}
+    GPSManager() : latitude(0.0), longitude(0.0), isON(false), fixStatus(false) {}
 
     void begin() {
         char rx_buff[128];
         
         send_at_cmd("AT+CGNSPWR=1\r\n", rx_buff, sizeof(rx_buff), 2000);
-
+        isON = true;
         Serial.println("[DEBUG] GPS pomyslnie zainicjowany.");
     }
 
     void update() {
+        if(!isON) return;
         char rx_buff[256];
 
         if(send_at_cmd("AT+CGNSINF\r\n", rx_buff, sizeof(rx_buff), 2000) > 0) {
             String response(rx_buff);
-            Serial.print("[GNSS RAW] ");
-            Serial.println(response);
             parseResponse(response);
         }
     }
@@ -79,16 +79,19 @@ class GPSManager {
     void pause() {
         if (!isON) return;
         char rx_buff[128];
-        // Wyłączamy zasilanie GNSS - zwalniamy radio dla GSM
         send_at_cmd("AT+CGNSPWR=0\r\n", rx_buff, sizeof(rx_buff), 2000);
+        isON = false;
+        fixStatus = false;
         Serial.println("[DEBUG] GPS spauzowany (oddano antene dla GPRS).");
     }
 
     void resume() {
-        if (!isON) return;
+        if (isON) return;
+        fixStatus = false;
+        timestamp = 0;
         char rx_buff[128];
-        // Włączamy zasilanie GNSS ponownie
         send_at_cmd("AT+CGNSPWR=1\r\n", rx_buff, sizeof(rx_buff), 2000);
+        isON = true;
         Serial.println("[DEBUG] GPS wznowiony (szukanie satelitow).");
     }
 
@@ -105,6 +108,10 @@ class GPSManager {
     }
 
     bool hasFix() {
+        return fixStatus;
+    }
+
+    bool isPowered() {
         return isON;
     }
 };
