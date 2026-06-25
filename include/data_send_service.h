@@ -48,6 +48,7 @@ typedef struct {
 celerometru palety 1. */
     float accelz_palette1; /**< Przyspieszenie w osi Z, z ak
 celerometru palety 1. */
+    bool motion_detected_p1;
 uint32_t timestamp;             /**< Znacznik czasu pomiaru, w formacie UNIX
 epoch. */
 } sensor_data_t;
@@ -69,6 +70,10 @@ void data_service_init(void);
 bool data_service_push(sensor_data_t* data);
 
 bool data_service_is_busy(void);
+
+void saveDataOffline(sensor_data_t* data);
+
+void sendBackupData();
 
 #ifdef __cplusplus
 }
