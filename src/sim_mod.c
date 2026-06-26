@@ -148,7 +148,7 @@ bool sim7070_wait_for_network(void) {
     char rx_buf[BUF_SIZE];
     ESP_LOGI(TAG, "Oczekiwanie na rejestrację w sieci (max 60s)...");
     
-    for (int i = 0; i < 180; i++) {
+    for (int i = 0; i < 10; i++) {
         // Wysyłamy zapytanie o status rejestracji
         if (send_at_cmd("AT+CREG?\r\n", rx_buf, sizeof(rx_buf), 1000) > 0) {
             
@@ -262,24 +262,49 @@ bool sim7070_mqtt_send(const char *topic, const char *payload) {
 cell_info_t sim7070_get_network_params(void) {
     cell_info_t info = {0, 0, 0, 0, false};
     char rx_buf[BUF_SIZE];
-    
+
+    // Opcjonalne sprawdzenie sygnału
     send_at_cmd("AT+CSQ\r\n", rx_buf, sizeof(rx_buf), 1000);
-    
+
+    // Odpytanie o parametry sieci
     if (send_at_cmd("AT+CPSI?\r\n", rx_buf, sizeof(rx_buf), 2000) > 0) {
         char *cpsi_ptr = strstr(rx_buf, "+CPSI:");
+        
         if (cpsi_ptr != NULL) {
-            char sys_mode[16];
-            char mcc_mnc[16];
-            
-            // Format GSM w SIM7070: +CPSI: GSM,Online,260-01,0x1A2B,24523,...
-            // LAC (Location Area Code) jest na miejscu TAC
+            char sys_mode[16] = {0};
+            char mcc_mnc[16] = {0};
+            unsigned long tmp_lac = 0;
+            unsigned long tmp_cid = 0;
+            unsigned int tmp_mcc = 0;
+            unsigned int tmp_mnc = 0;
+
+            // %[^,] bezpiecznie pomija status (np. "Online")
             if (sscanf(cpsi_ptr, "+CPSI: %15[^,],%*[^,],%15[^,],%lx,%lu", 
-                       sys_mode, mcc_mnc, &info.tac, &info.cid) >= 4) {
-                
-                if (strstr(sys_mode, "GSM") != NULL) {
-                    sscanf(mcc_mnc, "%hu-%hu", &info.mcc, &info.mnc);
-                    info.is_valid = true;
+                       sys_mode, mcc_mnc, &tmp_lac, &tmp_cid) == 4) {
+
+                ESP_LOGI("SIM7070_CELL", "Modem raportuje technologie: [%s], Operator: [%s]", sys_mode, mcc_mnc);
+
+                // Akceptujemy wszystko co nie jest "NO SERVICE"
+                if (strstr(sys_mode, "NO SERVICE") == NULL) {
+
+                    // Parsowanie MCC i MNC (np. "260-01" lub "260-02")
+                    if (sscanf(mcc_mnc, "%u-%u", &tmp_mcc, &tmp_mnc) == 2) {
+                        info.mcc = (uint16_t)tmp_mcc;
+                        info.mnc = (uint16_t)tmp_mnc;
+                        info.tac = (uint32_t)tmp_lac;
+                        info.cid = (uint32_t)tmp_cid;
+                        info.is_valid = true;
+                        
+                        ESP_LOGI("SIM7070_CELL", "SUKCES! Przechwycono dane: MCC=%d, MNC=%d, TAC=%X, CID=%lu", 
+                                 info.mcc, info.mnc, info.tac, info.cid);
+                    } else {
+                        ESP_LOGE("SIM7070_CELL", "Blad rozdzielenia MCC i MNC: %s", mcc_mnc);
+                    }
+                } else {
+                    ESP_LOGW("SIM7070_CELL", "Modem jest poza zasiegiem sieci (NO SERVICE).");
                 }
+            } else {
+                ESP_LOGE("SIM7070_CELL", "Nie udalo sie sparsowac odpowiedzi CPSI!");
             }
         }
     }
