@@ -53,14 +53,12 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
                 sensor_data_ble_t* incomingData =
                     (sensor_data_ble_t*)recivedData.data();
                 if (deviceAddress == expectedMacPallet1) {
-                    Serial.println("-------------------ZNALEZIONO DANE Z PALETY 1-------------------");
                     palletSensor1->updateDataFromBLE(
                         incomingData->specific.accel.x,
                         incomingData->specific.accel.y,
                         incomingData->specific.accel.z,
                         incomingData->specific.accel.motion_detected);
                 } else if (deviceAddress == expectedMacSecondaryCentral) {
-                    Serial.println("-------------------ZNALEZIONO DANE Z DRUGIEJ CENTRALI-------------------");
                     secondaryCentral->updateDataFromBLE(
                         incomingData->specific.env.temp,
                         incomingData->specific.env.humid,

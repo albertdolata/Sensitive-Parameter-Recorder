@@ -63,7 +63,7 @@ int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_
 bool sim7070_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
     static bool hw_initialized = false;
     if (!hw_initialized) {
-        gpio_config_t io_conf = {}; // Wyzerowanie struktury
+        gpio_config_t io_conf = {};
         io_conf.pin_bit_mask = (1ULL << pwr_pin);
         io_conf.mode = GPIO_MODE_OUTPUT;
         io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
@@ -73,7 +73,7 @@ bool sim7070_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
         gpio_set_level(pwr_pin, 0);
 
         uart_config_t uart_config = {
-            .baud_rate = 115200, // Rekomendowany baudrate dla SIM7070
+            .baud_rate = 115200,
             .data_bits = UART_DATA_8_BITS,
             .parity    = UART_PARITY_DISABLE,
             .stop_bits = UART_STOP_BITS_1,
@@ -100,7 +100,7 @@ bool sim7070_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
         ESP_LOGI(TAG, "Próba sprzętowego uruchomienia modemu %d/%d...", attempt, max_retries);
         
         gpio_set_level(pwr_pin, 1);
-        vTaskDelay(pdMS_TO_TICKS(1000)); // SIM7070 wymaga ~1s PWRKEY
+        vTaskDelay(pdMS_TO_TICKS(1000));
         gpio_set_level(pwr_pin, 0);
         vTaskDelay(pdMS_TO_TICKS(4000));
         
@@ -127,10 +127,8 @@ bool sim7070_init(gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t pwr_pin) {
     send_at_cmd("ATE0\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+CFUN=0\r\n", rx_buf, sizeof(rx_buf), 5000);
 
-    // Konfiguracja RAN - Wymuszenie GSM (GPRS/EDGE)
     send_at_cmd("AT+CNMP=13\r\n", rx_buf, sizeof(rx_buf), 2000);
     
-    // Konfiguracja App Network dla kontekstu 0 (IPv4, APN: "internet")
     send_at_cmd("AT+CNCFG=0,1,\"internet\"\r\n", rx_buf, sizeof(rx_buf), 2000);
 
     send_at_cmd("AT+CFUN=1\r\n", rx_buf, sizeof(rx_buf), 10000);
@@ -149,14 +147,11 @@ bool sim7070_wait_for_network(void) {
     ESP_LOGI(TAG, "Oczekiwanie na rejestrację w sieci (max 60s)...");
     
     for (int i = 0; i < 10; i++) {
-        // Wysyłamy zapytanie o status rejestracji
         if (send_at_cmd("AT+CREG?\r\n", rx_buf, sizeof(rx_buf), 1000) > 0) {
             
-            // USUŃ BIAŁE ZNAKI DLA CZYTELNOŚCI LOGA
             char* ptr = rx_buf;
             while (*ptr) { if (*ptr == '\r' || *ptr == '\n') *ptr = ' '; ptr++; }
             
-            // WYDRUKUJ TO, CO ODPOWIEDZIAŁA SIEĆ
             ESP_LOGI(TAG, "Status CREG [%d/60]: %s", i+1, rx_buf);
             
             if (strstr(rx_buf, ",1") || strstr(rx_buf, ",5")) {
@@ -263,10 +258,8 @@ cell_info_t sim7070_get_network_params(void) {
     cell_info_t info = {0, 0, 0, 0, false};
     char rx_buf[BUF_SIZE];
 
-    // Opcjonalne sprawdzenie sygnału
     send_at_cmd("AT+CSQ\r\n", rx_buf, sizeof(rx_buf), 1000);
 
-    // Odpytanie o parametry sieci
     if (send_at_cmd("AT+CPSI?\r\n", rx_buf, sizeof(rx_buf), 2000) > 0) {
         char *cpsi_ptr = strstr(rx_buf, "+CPSI:");
         
@@ -278,16 +271,13 @@ cell_info_t sim7070_get_network_params(void) {
             unsigned int tmp_mcc = 0;
             unsigned int tmp_mnc = 0;
 
-            // %[^,] bezpiecznie pomija status (np. "Online")
             if (sscanf(cpsi_ptr, "+CPSI: %15[^,],%*[^,],%15[^,],%lx,%lu", 
                        sys_mode, mcc_mnc, &tmp_lac, &tmp_cid) == 4) {
 
                 ESP_LOGI("SIM7070_CELL", "Modem raportuje technologie: [%s], Operator: [%s]", sys_mode, mcc_mnc);
 
-                // Akceptujemy wszystko co nie jest "NO SERVICE"
                 if (strstr(sys_mode, "NO SERVICE") == NULL) {
 
-                    // Parsowanie MCC i MNC (np. "260-01" lub "260-02")
                     if (sscanf(mcc_mnc, "%u-%u", &tmp_mcc, &tmp_mnc) == 2) {
                         info.mcc = (uint16_t)tmp_mcc;
                         info.mnc = (uint16_t)tmp_mnc;
@@ -341,7 +331,6 @@ static void sim7070_uart_event_task(void *pvParameters) {
                             xEventGroupSetBits(at_event_group, AT_BIT_PROMPT);
                             fsm_rx_idx = 0;
                         }
-                        // Zmiana na CGREG dla sieci GPRS/EDGE
                         else if (strstr(fsm_rx_buffer, "+CGREG: 0") || strstr(fsm_rx_buffer, "+CREG: 0")) {
                             ESP_LOGW(TAG, "URC: Awaria łącza radiowego (odrzut z MSC/SGSN)!");
                             fsm_rx_idx = 0; 

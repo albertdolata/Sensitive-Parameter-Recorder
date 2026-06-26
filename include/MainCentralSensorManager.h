@@ -41,7 +41,6 @@ class MainCentralSensorManager {
     bool initializeAllSensors() {
         for (int i = 0; i < NUMBER_OF_SENSORS; ++i) {
             if (!sensors[i]->initialize()) {
-                Serial.printf("Failed to initialize sensor %d\n", i);
                 return false;
             }
         }

@@ -63,7 +63,6 @@ class GPSManager {
         
         send_at_cmd("AT+CGNSPWR=1\r\n", rx_buff, sizeof(rx_buff), 2000);
         isON = true;
-        Serial.println("[DEBUG] GPS pomyslnie zainicjowany.");
     }
 
     void update() {
@@ -82,7 +81,6 @@ class GPSManager {
         send_at_cmd("AT+CGNSPWR=0\r\n", rx_buff, sizeof(rx_buff), 2000);
         isON = false;
         fixStatus = false;
-        Serial.println("[DEBUG] GPS spauzowany (oddano antene dla GPRS).");
     }
 
     void resume() {
@@ -92,7 +90,6 @@ class GPSManager {
         char rx_buff[128];
         send_at_cmd("AT+CGNSPWR=1\r\n", rx_buff, sizeof(rx_buff), 2000);
         isON = true;
-        Serial.println("[DEBUG] GPS wznowiony (szukanie satelitow).");
     }
 
     double getLatitude() {

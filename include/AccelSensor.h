@@ -18,7 +18,6 @@ class AccelSensor : public Sensor {
 
     bool initialize() override {
         return lis3dh.begin(i2c_address);
-        //lis3dh.setRange(LIS3DH_RANGE_2_G); //do ustalenia zakres pomiarowy
     }
 
     void readData() override {

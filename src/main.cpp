@@ -65,12 +65,10 @@ void assignSimComDataToStruct(sensor_data_t* data, GPSManager* gps) {
 
 void SIMComInit() {
     if (!sim7070_init(SIM_RX_PIN, SIM_TX_PIN, SIM_PWR_PIN)) {
-        Serial.println("Błąd inicjalizacji modemu SIM7070. Restartowanie...");
         ESP.restart();
     }
 
     if (!sim7070_wait_for_network()) {
-        Serial.println("Nie można połączyć z siecią. Restartowanie...");
         ESP.restart();
     }
 }
@@ -90,14 +88,13 @@ void checkAndUpdateTime(GPSManager* gps, uint32_t* last_gps_time) {
     if (gps->hasFix() && gps->getTimestamp() != *last_gps_time) {
         setESP32Time(gps->getTimestamp());
         *last_gps_time = gps->getTimestamp();
-        Serial.println("Czas Centrali zaktualizowany na podstawie GPS.");
     }
 }
 
 void setup() {
     Serial.begin(115200);
-    esp_log_level_set("*", ESP_LOG_INFO);
-    esp_log_level_set("SIM7070_GPRS", ESP_LOG_DEBUG);
+    esp_log_level_set("*", ESP_LOG_ERROR);
+    esp_log_level_set("SIM7070_GPRS", ESP_LOG_ERROR);
     delay(1000);
 
     pinMode(LED_PWR, OUTPUT);
@@ -108,7 +105,6 @@ void setup() {
     digitalWrite(LED_STATUS, LOW);
     digitalWrite(LED_USER, LOW);
 
-    Serial.println("\n ----------- Rejestrator uruchomiony -----------");
     centralSensorManager.initializeAllSensors();
 
     SPIFFSinit();
@@ -133,13 +129,11 @@ void loop() {
                 gpsWaitStart = millis();
             }
             if (GPS.hasFix()) {
-                Serial.println("Fix uzyskany.");
                 setESP32Time(GPS.getTimestamp());
                 GPS.pause();
                 btsWaitStart = millis();
                 centralState = 1;
             } else if (millis() - gpsWaitStart >= 120000) { 
-                Serial.println("[TIMEOUT] Brak Fixa GPS. Przechodze dalej zeby zebrac czujniki.");
                 GPS.pause();
                 btsWaitStart = millis();
                 centralState = 1;
@@ -150,11 +144,8 @@ void loop() {
         case 1:
             if (millis() - lastCpsiCheck >= 1000) {
                     lastCpsiCheck = millis();
-                    
                     cell_info_t cell = sim7070_get_network_params();
-                    
                     if (cell.is_valid) {
-                        Serial.println("Dane BTS zdobyte! Przejscie do czujnikow.");
                         centralData.cell_info.mcc = cell.mcc;
                         centralData.cell_info.mnc = cell.mnc;
                         centralData.cell_info.tac = cell.tac;
@@ -163,7 +154,6 @@ void loop() {
                         centralState = 2;
                     } 
                     else if (millis() - btsWaitStart >= 15000) { 
-                        Serial.println("Timeout BTS (Brak sieci po 15s).");
                         centralState = 2;
                     }
                 }

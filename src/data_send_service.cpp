@@ -136,12 +136,10 @@ bool data_service_is_busy(void) {
 void saveDataOffline(sensor_data_t* data) {
     File dataFile = SPIFFS.open("/data_backup.dat", FILE_APPEND);
     if (!dataFile) {
-        Serial.println("Błąd otwierania pliku do zapisu danych offline!");
         return;
     } else {
         dataFile.write((uint8_t*)data, sizeof(sensor_data_t));
         dataFile.close();
-        Serial.println("Dane zapisane offline pomyślnie.");
     }
 }
 
@@ -157,8 +155,6 @@ void sendBackupData() {
 
     File tempFile = SPIFFS.open("/temp_backup.dat", FILE_WRITE);
     if (!tempFile) {
-        Serial.println(
-            "Błąd otwierania tymczasowego pliku do zapisu danych offline!");
         dataFile.close();
         return;
     }
@@ -197,7 +193,6 @@ void sendBackupData() {
                 offlineData.cell_info.tac, offlineData.cell_info.cid);
 
             if (sim7070_mqtt_send("dom/czujnik1", json_buffer)) {
-                Serial.println("[SPIFFS] Zalegla paczka wyslana!");
             } else {
                 networkFailed = true;
                 dataNotSend++;
@@ -214,10 +209,8 @@ void sendBackupData() {
     SPIFFS.remove("/data_backup.dat");
 
     if (dataNotSend > 0) {
-        Serial.printf("Liczba nie wysłanych danych offline: %d\n", dataNotSend);
         SPIFFS.rename("/temp_backup.dat", "/data_backup.dat");
     } else {
         SPIFFS.remove("/temp_backup.dat");
-        Serial.println("Wszystkie dane offline zostały wysłane pomyślnie.");
     }
 }
