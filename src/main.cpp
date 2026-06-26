@@ -1,12 +1,11 @@
 #include <Arduino.h>
 
 #include "GPSManager.h"
-#include "data_send_service.h"
-#include "sys/time.h"
-#include "SPIFFS.h"
 #include "MainCentralSensorManager.h"
-
+#include "SPIFFS.h"
+#include "data_send_service.h"
 #include "esp_log.h"
+#include "sys/time.h"
 
 #define SIM_RX_PIN GPIO_NUM_18
 #define SIM_TX_PIN GPIO_NUM_17
@@ -21,12 +20,30 @@
 #define MAC_PALLETE_1 "d1:d2:e4:92:0e:c4"
 #define MAC_SECONDARY_CENTRAL "ca:37:e3:06:9b:84"
 
-MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN, ACCEL_SENSOR_I2C_ADDR, MAC_PALLETE_1, MAC_SECONDARY_CENTRAL);
+volatile sensor_data_t centralData = {0};
+volatile uint8_t centralState = 0;
+volatile uint32_t sleepTimeStart = 0;
+volatile uint32_t btsWaitStart = 0;
+volatile uint32_t lastCpsiCheck = 0;
+volatile uint32_t gpsWaitStart = 0;
 
-BLEScan* pBLEScan; 
+MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN,
+                                              ACCEL_SENSOR_I2C_ADDR,
+                                              MAC_PALLETE_1,
+                                              MAC_SECONDARY_CENTRAL);
+
+BLEScan* pBLEScan;
 GPSManager GPS;
 
 bool initial_fix_acquired = false;
+
+void bleScanTask(void* parameter) {
+    while (true) {
+        BLEScanResults foundDevices = pBLEScan->start(6, false);
+        pBLEScan->clearResults();
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
 
 void setESP32Time(uint32_t timestamp) {
     struct timeval tv;
@@ -35,84 +52,15 @@ void setESP32Time(uint32_t timestamp) {
     settimeofday(&tv, NULL);
 }
 
-void SPIFFSinit(){
-    if(!SPIFFS.begin(true)) {
+void SPIFFSinit() {
+    if (!SPIFFS.begin(true)) {
         ESP.restart();
     }
 }
 
-void saveDataOffline(sensor_data_t* data){
-    File dataFile = SPIFFS.open("/data_backup.dat", FILE_APPEND);
-    if (!dataFile) {
-        Serial.println("Błąd otwierania pliku do zapisu danych offline!");
-        return;
-    } else {
-        dataFile.write((uint8_t*)data, sizeof(sensor_data_t));
-        dataFile.close();
-        Serial.println("Dane zapisane offline pomyślnie.");
-    }
-}
-
-void sendBackupData() {
-    if(!SPIFFS.exists("/data_backup.dat")) {
-        return;
-    }
-    File dataFile = SPIFFS.open("/data_backup.dat", FILE_READ);
-    if(!dataFile) {
-        Serial.println("Błąd otwierania pliku z danymi offline!");
-        return;
-    }
-
-    if(dataFile.size() == 0) {
-        dataFile.close();
-        SPIFFS.remove("/data_backup.dat");
-        return;
-    }
-
-    File tempFile = SPIFFS.open("/temp_backup.dat", FILE_WRITE);
-    if(!tempFile) {
-        Serial.println("Błąd otwierania tymczasowego pliku do zapisu danych offline!");
-        dataFile.close();
-        return;
-    }
-
-    sensor_data_t offlineData = {0};
-    bool QueueFull = false;
-    int dataNotSend = 0;
-
-
-    while(dataFile.read((uint8_t*)&offlineData, sizeof(sensor_data_t)) == sizeof(sensor_data_t)) {
-        if(!QueueFull) {
-            if(!data_service_push(&offlineData)) {
-                QueueFull = true;
-                tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
-                dataNotSend++;
-            }
-        } else {
-            tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
-            dataNotSend++;
-        }
-    }
-    
-    dataFile.close();
-    tempFile.close();
-    SPIFFS.remove("/data_backup.dat");
-
-    if(dataNotSend > 0) {
-        Serial.print("Liczba nie wysłanych danych offline: ");
-        Serial.println(dataNotSend);
-        SPIFFS.rename("/temp_backup.dat", "/data_backup.dat");
-    } else {
-        SPIFFS.remove("/temp_backup.dat");
-        Serial.println("Wszystkie dane offline zostały wysłane pomyślnie.");
-    }
-}
-
 void assignSimComDataToStruct(sensor_data_t* data, GPSManager* gps) {
-    data->cell_info = sim7070_get_network_params();
     data->latitude = gps->getLatitude();
     data->longitude = gps->getLongitude();
-    data->timestamp = time(NULL);
 }
 
 void SIMComInit() {
@@ -131,18 +79,11 @@ void BLEInit() {
     BLEDevice::init("");
     pBLEScan = BLEDevice::getScan();
 
-    pBLEScan->setAdvertisedDeviceCallbacks(centralSensorManager.getBLESensorManager());
+    pBLEScan->setAdvertisedDeviceCallbacks(
+        centralSensorManager.getBLESensorManager());
     pBLEScan->setActiveScan(true);
     pBLEScan->setInterval(100);
     pBLEScan->setWindow(99);
-}
-
-void sendDataToServer(sensor_data_t* current_data) {
-    if(!data_service_push(current_data)) {
-        saveDataOffline(current_data);
-    } else {
-        sendBackupData();
-    }
 }
 
 void checkAndUpdateTime(GPSManager* gps, uint32_t* last_gps_time) {
@@ -155,7 +96,7 @@ void checkAndUpdateTime(GPSManager* gps, uint32_t* last_gps_time) {
 
 void setup() {
     Serial.begin(115200);
-    esp_log_level_set("*", ESP_LOG_INFO); 
+    esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set("SIM7070_GPRS", ESP_LOG_DEBUG);
     delay(1000);
 
@@ -179,56 +120,80 @@ void setup() {
     data_service_init();
 
     BLEInit();
+
+    xTaskCreatePinnedToCore(bleScanTask, "BLE Scan Task", 4096, NULL, 1, NULL,
+                            0);
 }
 
 void loop() {
-    sensor_data_t current_data = {0};
-    static uint32_t last_gps_time = 0;
-
-    Serial.println("\n ===================================================");
-    
-    if (!initial_fix_acquired) {
-        GPS.resume();
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        
-        GPS.update();
-        if (GPS.hasFix()) {
-            Serial.println("Fix zdobyty.");
-            checkAndUpdateTime(&GPS, &last_gps_time);
-            assignSimComDataToStruct(&current_data, &GPS);
-            initial_fix_acquired = true;
-            
-            GPS.pause();
-            vTaskDelay(pdMS_TO_TICKS(2000)); 
-        } else {
-            Serial.println("Czekanie na fix.");
-        }
-    } 
-    else {
-        assignSimComDataToStruct(&current_data, &GPS); 
+    switch (centralState) {
+        case 0:
+            if (!GPS.isPowered()) {
+                GPS.resume();
+                gpsWaitStart = millis();
+            }
+            if (GPS.hasFix()) {
+                Serial.println("Fix uzyskany.");
+                setESP32Time(GPS.getTimestamp());
+                GPS.pause();
+                btsWaitStart = millis();
+                centralState = 1;
+            } else if (millis() - gpsWaitStart >= 120000) { 
+                Serial.println("[TIMEOUT] Brak Fixa GPS. Przechodze dalej zeby zebrac czujniki.");
+                GPS.pause();
+                btsWaitStart = millis();
+                centralState = 1;
+            } else {
+                GPS.update();
+            }
+            break;
+        case 1:
+            if (millis() - lastCpsiCheck >= 1000) {
+                    lastCpsiCheck = millis();
+                    
+                    cell_info_t cell = sim7070_get_network_params();
+                    
+                    if (cell.is_valid) {
+                        Serial.println("Dane BTS zdobyte! Przejscie do czujnikow.");
+                        centralData.cell_info.mcc = cell.mcc;
+                        centralData.cell_info.mnc = cell.mnc;
+                        centralData.cell_info.tac = cell.tac;
+                        centralData.cell_info.cid = cell.cid;
+                        centralData.cell_info.is_valid = cell.is_valid;
+                        centralState = 2;
+                    } 
+                    else if (millis() - btsWaitStart >= 15000) { 
+                        Serial.println("Timeout BTS (Brak sieci po 15s).");
+                        centralState = 2;
+                    }
+                }
+            break;
+        case 2:
+            centralSensorManager.readAllSensorsData();
+            centralSensorManager.fillSensorData((sensor_data_t*)&centralData);
+            centralData.timestamp = time(NULL);
+            centralState = 3;
+            break;
+        case 3:
+            assignSimComDataToStruct((sensor_data_t*)&centralData, &GPS);
+            data_service_push((sensor_data_t*)&centralData);
+            centralState = 4;
+            break;
+        case 4:
+            if (!data_service_is_busy()) {
+                sleepTimeStart = millis();
+                centralState = 5;
+            }
+            break;
+        case 5:
+            if (millis() - sleepTimeStart >= 10000) {
+                gpsWaitStart = millis();
+                centralState = 0;
+            }
+            break;
+        default:
+            break;
     }
 
-    Serial.println(" ------- Odczyt BLE i Czujników -------");
-    digitalWrite(LED_USER, HIGH);
-    BLEScanResults foundDevices = pBLEScan->start(6, false);
-    pBLEScan->clearResults();
-    digitalWrite(LED_USER, LOW);
-
-    centralSensorManager.readAllSensorsData();
-    centralSensorManager.fillSensorData(&current_data);
-
-    Serial.println(" ------- Wysyłka / Zapis -------");
-    digitalWrite(LED_STATUS, HIGH);
-    
-    sendDataToServer(&current_data); 
-    
-    if (initial_fix_acquired) {
-        while (data_service_is_busy()) {
-            Serial.println("Wysyłanie danych...");
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-    }
-    
-    digitalWrite(LED_STATUS, LOW);
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    vTaskDelay(pdMS_TO_TICKS(100));
 }
