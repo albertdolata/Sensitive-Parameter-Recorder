@@ -1,9 +1,12 @@
 #include <Arduino.h>
 
-#include "GPSManager.h"
-#include "MainCentralSensorManager.h"
+#include "../include/core/system_init.h"
+#include "../include/managers/GPSManager.h"
+#include "../include/managers/MainCentralSensorManager.h"
+#include "../include/services/ble_service.h"
+#include "../include/simcom/data_send_service.h"
+#include "../include/utils/time_manager.h"
 #include "SPIFFS.h"
-#include "data_send_service.h"
 #include "esp_log.h"
 #include "sys/time.h"
 
@@ -31,64 +34,11 @@ MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN,
                                               ACCEL_SENSOR_I2C_ADDR,
                                               MAC_PALLETE_1,
                                               MAC_SECONDARY_CENTRAL);
-
-BLEScan* pBLEScan;
 GPSManager GPS;
-
-bool initial_fix_acquired = false;
-
-void bleScanTask(void* parameter) {
-    while (true) {
-        BLEScanResults foundDevices = pBLEScan->start(6, false);
-        pBLEScan->clearResults();
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-}
-
-void setESP32Time(uint32_t timestamp) {
-    struct timeval tv;
-    tv.tv_sec = timestamp;
-    tv.tv_usec = 0;
-    settimeofday(&tv, NULL);
-}
-
-void SPIFFSinit() {
-    if (!SPIFFS.begin(true)) {
-        ESP.restart();
-    }
-}
 
 void assignSimComDataToStruct(sensor_data_t* data, GPSManager* gps) {
     data->latitude = gps->getLatitude();
     data->longitude = gps->getLongitude();
-}
-
-void SIMComInit() {
-    if (!sim7070_init(SIM_RX_PIN, SIM_TX_PIN, SIM_PWR_PIN)) {
-        ESP.restart();
-    }
-
-    if (!sim7070_wait_for_network()) {
-        ESP.restart();
-    }
-}
-
-void BLEInit() {
-    BLEDevice::init("");
-    pBLEScan = BLEDevice::getScan();
-
-    pBLEScan->setAdvertisedDeviceCallbacks(
-        centralSensorManager.getBLESensorManager());
-    pBLEScan->setActiveScan(true);
-    pBLEScan->setInterval(100);
-    pBLEScan->setWindow(99);
-}
-
-void checkAndUpdateTime(GPSManager* gps, uint32_t* last_gps_time) {
-    if (gps->hasFix() && gps->getTimestamp() != *last_gps_time) {
-        setESP32Time(gps->getTimestamp());
-        *last_gps_time = gps->getTimestamp();
-    }
 }
 
 void setup() {
@@ -106,16 +56,11 @@ void setup() {
     digitalWrite(LED_USER, LOW);
 
     centralSensorManager.initializeAllSensors();
-
     SPIFFSinit();
-
-    SIMComInit();
-
+    SIMComInit(GPIO_NUM_18, GPIO_NUM_17, GPIO_NUM_6);
     GPS.begin();
-
     data_service_init();
-
-    BLEInit();
+    BLEInit(centralSensorManager.getBLESensorManager());
 
     xTaskCreatePinnedToCore(bleScanTask, "BLE Scan Task", 4096, NULL, 1, NULL,
                             0);
@@ -133,7 +78,7 @@ void loop() {
                 GPS.pause();
                 btsWaitStart = millis();
                 centralState = 1;
-            } else if (millis() - gpsWaitStart >= 120000) { 
+            } else if (millis() - gpsWaitStart >= 120000) {
                 GPS.pause();
                 btsWaitStart = millis();
                 centralState = 1;
@@ -143,20 +88,19 @@ void loop() {
             break;
         case 1:
             if (millis() - lastCpsiCheck >= 1000) {
-                    lastCpsiCheck = millis();
-                    cell_info_t cell = sim7070_get_network_params();
-                    if (cell.is_valid) {
-                        centralData.cell_info.mcc = cell.mcc;
-                        centralData.cell_info.mnc = cell.mnc;
-                        centralData.cell_info.tac = cell.tac;
-                        centralData.cell_info.cid = cell.cid;
-                        centralData.cell_info.is_valid = cell.is_valid;
-                        centralState = 2;
-                    } 
-                    else if (millis() - btsWaitStart >= 15000) { 
-                        centralState = 2;
-                    }
+                lastCpsiCheck = millis();
+                cell_info_t cell = sim7070_get_network_params();
+                if (cell.is_valid) {
+                    centralData.cell_info.mcc = cell.mcc;
+                    centralData.cell_info.mnc = cell.mnc;
+                    centralData.cell_info.tac = cell.tac;
+                    centralData.cell_info.cid = cell.cid;
+                    centralData.cell_info.is_valid = cell.is_valid;
+                    centralState = 2;
+                } else if (millis() - btsWaitStart >= 15000) {
+                    centralState = 2;
                 }
+            }
             break;
         case 2:
             centralSensorManager.readAllSensorsData();

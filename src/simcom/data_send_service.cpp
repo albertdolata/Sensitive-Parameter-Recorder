@@ -1,4 +1,4 @@
-#include "data_send_service.h"
+#include "../include/simcom/data_send_service.h"
 
 #include <string.h>
 
@@ -7,7 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "sim7070_core.h"
+#include "../include/simcom/sim7070_core.h"
 
 static const char* TAG = "DATA_SERVICE";
 static QueueHandle_t data_queue = NULL;

@@ -1,5 +1,5 @@
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#include "sim7070_core.h"
+#include "../include/simcom/sim7070_core.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
