@@ -34,6 +34,7 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
     BLESecondaryCentral* secondaryCentral;
     std::string expectedMacPallet1;
     std::string expectedMacSecondaryCentral;
+    bool gotPackage;
 
    public:
     BLESensorManager(BLEPalletSensor* palletSensor1,
@@ -42,4 +43,6 @@ class BLESensorManager : public BLEAdvertisedDeviceCallbacks {
                      std::string SecondaryCentralMACId);
 
     void onResult(BLEAdvertisedDevice advertisedDevice) override;
+
+    bool getAndClearPackageFlag();
 };

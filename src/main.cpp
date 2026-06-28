@@ -29,6 +29,7 @@ volatile uint32_t sleepTimeStart = 0;
 volatile uint32_t btsWaitStart = 0;
 volatile uint32_t lastCpsiCheck = 0;
 volatile uint32_t gpsWaitStart = 0;
+volatile uint32_t bleLedTimer = 0;
 
 MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN,
                                               ACCEL_SENSOR_I2C_ADDR,
@@ -67,6 +68,15 @@ void setup() {
 }
 
 void loop() {
+    if (centralSensorManager.BleGotPackage()) {
+        digitalWrite(LED_STATUS, HIGH);
+        bleLedTimer = millis();
+    }
+
+    if (digitalRead(LED_STATUS) == HIGH && (millis() - bleLedTimer >= 50)) {
+        digitalWrite(LED_STATUS, LOW);
+    }
+
     switch (centralState) {
         case 0:
             if (!GPS.isPowered()) {
@@ -110,11 +120,13 @@ void loop() {
             break;
         case 3:
             assignSimComDataToStruct((sensor_data_t*)&centralData, &GPS);
+            digitalWrite(LED_USER, HIGH);
             data_service_push((sensor_data_t*)&centralData);
             centralState = 4;
             break;
         case 4:
-            if (!data_service_is_busy()) {
+            if (!data_service_is_active()) {
+                digitalWrite(LED_USER, LOW);
                 sleepTimeStart = millis();
                 centralState = 5;
             }

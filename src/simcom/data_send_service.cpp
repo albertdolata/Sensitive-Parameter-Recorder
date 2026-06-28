@@ -11,6 +11,7 @@
 
 static const char* TAG = "DATA_SERVICE";
 static QueueHandle_t data_queue = NULL;
+static volatile bool is_sending = false;
 
 static void data_sender_task(void* pvParameters) {
     sensor_data_t incoming_data;
@@ -19,11 +20,13 @@ static void data_sender_task(void* pvParameters) {
 
     while (1) {
         if (xQueuePeek(data_queue, &incoming_data, portMAX_DELAY)) {
+                        is_sending = true;
             if (!sim7070_wait_for_network()) {
                 saveDataOffline(&incoming_data);
                 xQueueReceive(data_queue, &incoming_data, 0);
                 sim7070_mqtt_disconnect();
                 mqtt_connected = false;
+                is_sending = false;
                 continue;
             }
 
@@ -34,6 +37,7 @@ static void data_sender_task(void* pvParameters) {
                     ESP_LOGW(TAG, "Błąd negocjacji MQTT. Ponowienie za 5s.");
                     saveDataOffline(&incoming_data);
                     xQueueReceive(data_queue, &incoming_data, 0);
+                    is_sending = false;
                     continue;
                 }
             }
@@ -101,14 +105,11 @@ static void data_sender_task(void* pvParameters) {
                 mqtt_connected = false;
             }
 
-            if (uxQueueMessagesWaiting(data_queue) == 0 && mqtt_connected) {
-                ESP_LOGI(TAG,
-                         "Kolejka pusta. Sprawdzam archiwum SPIFFS przed "
-                         "oddaniem anteny...");
-                sendBackupData();
-                sim7070_mqtt_disconnect();
-                mqtt_connected = false;
-            }
+            sendBackupData();
+
+            sim7070_mqtt_disconnect();
+            mqtt_connected = false;
+            is_sending = false;
         }
     }
 }
@@ -121,6 +122,7 @@ void data_service_init(void) {
 bool data_service_push(sensor_data_t* data) {
     if (data_queue == NULL) return false;
     if (xQueueSend(data_queue, data, 0) == pdPASS) {
+                        is_sending = true;
         return true;
     } else {
         saveDataOffline(data);
@@ -143,24 +145,25 @@ void saveDataOffline(sensor_data_t* data) {
     }
 }
 
-void sendBackupData() {
+bool sendBackupData() {
     if (!SPIFFS.exists("/data_backup.dat")) {
-        return;
+        return true;
     }
     File dataFile = SPIFFS.open("/data_backup.dat", FILE_READ);
     if (!dataFile || dataFile.size() == 0) {
         SPIFFS.remove("/data_backup.dat");
-        return;
+        return true;
     }
 
     File tempFile = SPIFFS.open("/temp_backup.dat", FILE_WRITE);
     if (!tempFile) {
         dataFile.close();
-        return;
+        return false;
     }
 
     sensor_data_t offlineData = {0};
     char json_buffer[768];
+    int dataSent = 0;
     int dataNotSend = 0;
     bool networkFailed = false;
 
@@ -193,6 +196,7 @@ void sendBackupData() {
                 offlineData.cell_info.tac, offlineData.cell_info.cid);
 
             if (sim7070_mqtt_send("dom/czujnik1", json_buffer)) {
+                dataSent++;
             } else {
                 networkFailed = true;
                 dataNotSend++;
@@ -213,4 +217,10 @@ void sendBackupData() {
     } else {
         SPIFFS.remove("/temp_backup.dat");
     }
+    ESP_LOGI(TAG, "Backlog: wysłano %d, pozostało %d", dataSent, dataNotSend);
+    return !networkFailed;
+}
+
+bool data_service_is_active(void) {
+    return is_sending;
 }

@@ -49,3 +49,7 @@ void MainCentralSensorManager::fillSensorData(sensor_data_t* data) {
     data->accelz_palette1 = palletSensor1.getAxisZ();
     data->motion_detected_p1 = (palletSensor1.isMotionDetected() == true);
 }
+
+bool MainCentralSensorManager::BleGotPackage() {
+    return BLEManager.getAndClearPackageFlag();
+}

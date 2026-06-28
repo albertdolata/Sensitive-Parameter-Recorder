@@ -7,7 +7,8 @@ BLESensorManager::BLESensorManager(BLEPalletSensor* palletSensor1,
     : palletSensor1(palletSensor1),
       secondaryCentral(secondaryCentral),
       expectedMacPallet1(PalletMACId1),
-      expectedMacSecondaryCentral(SecondaryCentralMACId) {}
+      expectedMacSecondaryCentral(SecondaryCentralMACId),
+      gotPackage(false) {}
 
 void BLESensorManager::onResult(BLEAdvertisedDevice advertisedDevice) {
     std::string deviceAddress = advertisedDevice.getAddress().toString();
@@ -22,12 +23,23 @@ void BLESensorManager::onResult(BLEAdvertisedDevice advertisedDevice) {
                     incomingData->specific.accel.y,
                     incomingData->specific.accel.z,
                     incomingData->specific.accel.motion_detected);
+                gotPackage = true;
             } else if (deviceAddress == expectedMacSecondaryCentral) {
                 secondaryCentral->updateDataFromBLE(
                     incomingData->specific.env.temp,
                     incomingData->specific.env.humid,
                     incomingData->specific.env.is_closed);
+                gotPackage = true;
             }
         }
+    }
+}
+
+bool BLESensorManager::getAndClearPackageFlag() {
+    if (gotPackage) {
+        gotPackage = false;
+        return true;
+    } else {
+        return false;
     }
 }

@@ -38,4 +38,6 @@ class MainCentralSensorManager {
     BLESensorManager* getBLESensorManager();
 
     void fillSensorData(sensor_data_t* data);
+
+    bool BleGotPackage();
 };

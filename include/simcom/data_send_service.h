@@ -73,7 +73,9 @@ bool data_service_is_busy(void);
 
 void saveDataOffline(sensor_data_t* data);
 
-void sendBackupData();
+bool sendBackupData();
+
+bool data_service_is_active(void);
 
 #ifdef __cplusplus
 }
