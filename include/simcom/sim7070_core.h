@@ -100,6 +100,8 @@ int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len, uint32_t timeout_
 
 void sim7070_mqtt_disconnect(void);
 
+static void sim7070_recover(void);
+
 #ifdef __cplusplus
 
 
