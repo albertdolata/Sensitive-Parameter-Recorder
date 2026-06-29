@@ -77,6 +77,8 @@ bool sendBackupData();
 
 bool data_service_is_active(void);
 
+static void trimBacklogIfNeeded();
+
 #ifdef __cplusplus
 }
 #endif

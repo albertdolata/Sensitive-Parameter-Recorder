@@ -2,16 +2,20 @@
 
 #include <string.h>
 
+#include "../include/simcom/sim7070_core.h"
 #include "SPIFFS.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "../include/simcom/sim7070_core.h"
+
+#define MAX_BACKLOG_RECORDS 45000
+#define TRIM_TO_RECORDS 40000
 
 static const char* TAG = "DATA_SERVICE";
 static QueueHandle_t data_queue = NULL;
 static volatile bool is_sending = false;
+static SemaphoreHandle_t spiffs_mutex = NULL;
 
 static void data_sender_task(void* pvParameters) {
     sensor_data_t incoming_data;
@@ -20,7 +24,7 @@ static void data_sender_task(void* pvParameters) {
 
     while (1) {
         if (xQueuePeek(data_queue, &incoming_data, portMAX_DELAY)) {
-                        is_sending = true;
+            is_sending = true;
             if (!sim7070_wait_for_network()) {
                 saveDataOffline(&incoming_data);
                 xQueueReceive(data_queue, &incoming_data, 0);
@@ -116,13 +120,14 @@ static void data_sender_task(void* pvParameters) {
 
 void data_service_init(void) {
     data_queue = xQueueCreate(1, sizeof(sensor_data_t));
+    spiffs_mutex = xSemaphoreCreateMutex();
     xTaskCreate(data_sender_task, "data_sender_task", 8192, NULL, 5, NULL);
 }
 
 bool data_service_push(sensor_data_t* data) {
     if (data_queue == NULL) return false;
     if (xQueueSend(data_queue, data, 0) == pdPASS) {
-                        is_sending = true;
+        is_sending = true;
         return true;
     } else {
         saveDataOffline(data);
@@ -135,90 +140,149 @@ bool data_service_is_busy(void) {
     return uxQueueMessagesWaiting(data_queue) > 0;
 }
 
-void saveDataOffline(sensor_data_t* data) {
-    File dataFile = SPIFFS.open("/data_backup.dat", FILE_APPEND);
-    if (!dataFile) {
-        return;
-    } else {
-        dataFile.write((uint8_t*)data, sizeof(sensor_data_t));
-        dataFile.close();
-    }
-}
+static void trimBacklogIfNeeded() {
+    if (!SPIFFS.exists("/data_backup.dat")) return;
 
-bool sendBackupData() {
-    if (!SPIFFS.exists("/data_backup.dat")) {
-        return true;
-    }
     File dataFile = SPIFFS.open("/data_backup.dat", FILE_READ);
-    if (!dataFile || dataFile.size() == 0) {
-        SPIFFS.remove("/data_backup.dat");
-        return true;
+    if (!dataFile) return;
+
+    size_t fileSize = dataFile.size();
+    size_t currentRecords = fileSize / sizeof(sensor_data_t);
+    
+    bool needsTrim = (currentRecords >= MAX_BACKLOG_RECORDS);
+    bool isCorrupted = (fileSize % sizeof(sensor_data_t) != 0); 
+
+    if (!needsTrim && !isCorrupted) {
+        dataFile.close();
+        return;
     }
 
-    File tempFile = SPIFFS.open("/temp_backup.dat", FILE_WRITE);
+    if (isCorrupted) {
+        ESP_LOGE(TAG, "Wykryto uszkodzony plik (niepełny zapis)! Rozpoczynam naprawę...");
+    }
+
+    size_t recordsToSkip = 0;
+    if (needsTrim) {
+        recordsToSkip = currentRecords - TRIM_TO_RECORDS;
+    }
+
+    dataFile.seek(recordsToSkip * sizeof(sensor_data_t));
+
+    File tempFile = SPIFFS.open("/temp_trim.dat", FILE_WRITE);
     if (!tempFile) {
         dataFile.close();
-        return false;
+        return;
     }
 
-    sensor_data_t offlineData = {0};
-    char json_buffer[768];
-    int dataSent = 0;
-    int dataNotSend = 0;
-    bool networkFailed = false;
-
-    while (dataFile.read((uint8_t*)&offlineData, sizeof(sensor_data_t)) ==
-           sizeof(sensor_data_t)) {
-        if (!networkFailed) {
-            snprintf(
-                json_buffer, sizeof(json_buffer),
-                "{\"mcent\":{\"temp\":%.2f,\"hum\":%.2f,\"accelx\":%.2f,"
-                "\"accely\":%.2f,\"accelz\":%.2f,\"presence\":%s,\"time\":%lu},"
-                "\"scent\":{\"temp\":%.2f,\"hum\":%.2f,\"is_closed\":%s},"
-                "\"location\":{\"latg\":%.6f,\"long\":%.6f},"
-                "\"p1\":{\"p1x\":%.2f,\"p1y\":%.2f,\"p1z\":%.2f,\"p1mot\":%s},"
-                "\"cell\":{\"mcc\":%u,\"mnc\":%u,\"tac\":%lu,\"cid\":%lu}}",
-                offlineData.temperature_main_central,
-                offlineData.humidity_main_central,
-                offlineData.accelx_main_central,
-                offlineData.accely_main_central,
-                offlineData.accelz_main_central,
-                offlineData.presence_main_central ? "true" : "false",
-                (unsigned long)offlineData.timestamp,
-                offlineData.temperature_secondary_central,
-                offlineData.humidity_secondary_central,
-                offlineData.is_closed_secondary_central ? "true" : "false",
-                offlineData.latitude, offlineData.longitude,
-                offlineData.accelx_palette1, offlineData.accely_palette1,
-                offlineData.accelz_palette1,
-                offlineData.motion_detected_p1 ? "true" : "false",
-                offlineData.cell_info.mcc, offlineData.cell_info.mnc,
-                offlineData.cell_info.tac, offlineData.cell_info.cid);
-
-            if (sim7070_mqtt_send("dom/czujnik1", json_buffer)) {
-                dataSent++;
-            } else {
-                networkFailed = true;
-                dataNotSend++;
-                tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
-            }
-        } else {
-            dataNotSend++;
-            tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
-        }
+    uint8_t buf[sizeof(sensor_data_t)];
+    while (dataFile.read(buf, sizeof(buf)) == sizeof(buf)) {
+        tempFile.write(buf, sizeof(buf));
     }
 
     dataFile.close();
     tempFile.close();
     SPIFFS.remove("/data_backup.dat");
+    SPIFFS.rename("/temp_trim.dat", "/data_backup.dat");
 
-    if (dataNotSend > 0) {
-        SPIFFS.rename("/temp_backup.dat", "/data_backup.dat");
-    } else {
-        SPIFFS.remove("/temp_backup.dat");
+    if (needsTrim) {
+        ESP_LOGW(TAG, "Backlog przycięty: usunięto najstarsze rekordy by chronic Flash!");
     }
-    ESP_LOGI(TAG, "Backlog: wysłano %d, pozostało %d", dataSent, dataNotSend);
-    return !networkFailed;
+    if (isCorrupted) {
+        ESP_LOGI(TAG, "Naprawa ukończona: bezpiecznie usunięto niepełny zapis z końca pliku.");
+    }
+}
+
+void saveDataOffline(sensor_data_t* data) {
+    if (xSemaphoreTake(spiffs_mutex, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        trimBacklogIfNeeded();
+        File dataFile = SPIFFS.open("/data_backup.dat", FILE_APPEND);
+        if (dataFile) {
+            size_t written = dataFile.write((uint8_t*)data, sizeof(sensor_data_t));
+            if (written != sizeof(sensor_data_t)) {
+                ESP_LOGE(TAG, "Niepełny zapis offline! Flash może być pełny!");
+            }
+            dataFile.close();
+        }
+        xSemaphoreGive(spiffs_mutex);
+    }
+}
+
+bool sendBackupData() {
+    if (xSemaphoreTake(spiffs_mutex, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (!SPIFFS.exists("/data_backup.dat")) {
+            xSemaphoreGive(spiffs_mutex);
+            return true;
+        }
+        File dataFile = SPIFFS.open("/data_backup.dat", FILE_READ);
+        if (!dataFile || dataFile.size() == 0) {
+            if (dataFile) dataFile.close();
+            SPIFFS.remove("/data_backup.dat");
+            xSemaphoreGive(spiffs_mutex);
+            return true;
+        }
+
+        File tempFile = SPIFFS.open("/temp_backup.dat", FILE_WRITE);
+        if (!tempFile) {
+            dataFile.close();
+            xSemaphoreGive(spiffs_mutex);
+            return false;
+        }
+
+        sensor_data_t offlineData = {0};
+        char json_buffer[768];
+        int dataSent = 0;
+        int dataNotSend = 0;
+        bool networkFailed = false;
+
+        while (dataFile.read((uint8_t*)&offlineData, sizeof(sensor_data_t)) == sizeof(sensor_data_t)) {
+            if (!networkFailed) {
+                snprintf(
+                    json_buffer, sizeof(json_buffer),
+                    "{\"mcent\":{\"temp\":%.2f,\"hum\":%.2f,\"accelx\":%.2f,"
+                    "\"accely\":%.2f,\"accelz\":%.2f,\"presence\":%s,\"time\":%lu},"
+                    "\"scent\":{\"temp\":%.2f,\"hum\":%.2f,\"is_closed\":%s},"
+                    "\"location\":{\"latg\":%.6f,\"long\":%.6f},"
+                    "\"p1\":{\"p1x\":%.2f,\"p1y\":%.2f,\"p1z\":%.2f,\"p1mot\":%s},"
+                    "\"cell\":{\"mcc\":%u,\"mnc\":%u,\"tac\":%lu,\"cid\":%lu}}",
+                    offlineData.temperature_main_central, offlineData.humidity_main_central,
+                    offlineData.accelx_main_central, offlineData.accely_main_central, offlineData.accelz_main_central,
+                    offlineData.presence_main_central ? "true" : "false", (unsigned long)offlineData.timestamp,
+                    offlineData.temperature_secondary_central, offlineData.humidity_secondary_central,
+                    offlineData.is_closed_secondary_central ? "true" : "false",
+                    offlineData.latitude, offlineData.longitude,
+                    offlineData.accelx_palette1, offlineData.accely_palette1, offlineData.accelz_palette1,
+                    offlineData.motion_detected_p1 ? "true" : "false",
+                    offlineData.cell_info.mcc, offlineData.cell_info.mnc,
+                    offlineData.cell_info.tac, offlineData.cell_info.cid);
+
+                if (sim7070_mqtt_send("dom/czujnik1", json_buffer)) {
+                    dataSent++;
+                } else {
+                    networkFailed = true;
+                    dataNotSend++;
+                    tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
+                }
+            } else {
+                dataNotSend++;
+                tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
+            }
+        }
+
+        dataFile.close();
+        tempFile.close();
+        SPIFFS.remove("/data_backup.dat");
+
+        if (dataNotSend > 0) {
+            SPIFFS.rename("/temp_backup.dat", "/data_backup.dat");
+        } else {
+            SPIFFS.remove("/temp_backup.dat");
+        }
+        ESP_LOGI(TAG, "Backlog: wysłano %d, pozostało %d", dataSent, dataNotSend);
+        
+        xSemaphoreGive(spiffs_mutex);
+        return !networkFailed;
+    }
+    return false;
 }
 
 bool data_service_is_active(void) {

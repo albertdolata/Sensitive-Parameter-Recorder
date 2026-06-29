@@ -30,6 +30,7 @@ volatile uint32_t btsWaitStart = 0;
 volatile uint32_t lastCpsiCheck = 0;
 volatile uint32_t gpsWaitStart = 0;
 volatile uint32_t bleLedTimer = 0;
+volatile uint32_t sendAttemptStart = 0;
 
 MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN,
                                               ACCEL_SENSOR_I2C_ADDR,
@@ -122,6 +123,7 @@ void loop() {
             assignSimComDataToStruct((sensor_data_t*)&centralData, &GPS);
             digitalWrite(LED_USER, HIGH);
             data_service_push((sensor_data_t*)&centralData);
+            sendAttemptStart = millis();
             centralState = 4;
             break;
         case 4:
@@ -129,6 +131,8 @@ void loop() {
                 digitalWrite(LED_USER, LOW);
                 sleepTimeStart = millis();
                 centralState = 5;
+            } else if (millis() - sendAttemptStart >= 180000) {
+                ESP.restart();
             }
             break;
         case 5:

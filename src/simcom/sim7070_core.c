@@ -177,9 +177,10 @@ bool sim7070_wait_for_network(void) {
             if (strstr(rx_buf, ",1") || strstr(rx_buf, ",5")) {
                 creg_ok = true;
             }
-        } 
+        }
 
-        if (creg_ok && send_at_cmd("AT+CGREG?\r\n", rx_buf, sizeof(rx_buf), 1000) > 0) {
+        if (creg_ok &&
+            send_at_cmd("AT+CGREG?\r\n", rx_buf, sizeof(rx_buf), 1000) > 0) {
             char* ptr = rx_buf;
             while (*ptr) {
                 if (*ptr == '\r' || *ptr == '\n') *ptr = ' ';
@@ -192,7 +193,8 @@ bool sim7070_wait_for_network(void) {
         }
 
         if (creg_ok && cgreg_ok) {
-            ESP_LOGI(TAG, "SUKCES! Zarejestrowano w sieci GSM i przyłączono GPRS.");
+            ESP_LOGI(TAG,
+                     "SUKCES! Zarejestrowano w sieci GSM i przyłączono GPRS.");
             return true;
         }
 
@@ -205,6 +207,10 @@ bool sim7070_wait_for_network(void) {
     }
 
     ESP_LOGE(TAG, "Przekroczono czas. Sieć odrzuciła kartę.");
+    consecutive_failures++;
+    if (consecutive_failures >= MAX_CONSECUTIVE_FAILURES) {
+        sim7070_recover();
+    }
     return false;
 }
 
