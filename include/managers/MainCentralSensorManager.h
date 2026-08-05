@@ -1,7 +1,6 @@
 /**
  * @file MainCentralSensorManager.h
- * @brief Plik nagłówkowy zawierający deklaracje metod klasy
- * MainCentralSensorManager.
+ * @brief Plik nagłówkowy zawierający deklaracje klasy MainCentralSensorManager.
  */
 
 #pragma once
