@@ -1,3 +1,8 @@
+/**
+ * @file BLEPalletSensor.cpp
+ * @brief Plik źródłowy zawierający definicje metod klasy BLEPalletSensor.
+ */
+
 #include "../include/sensors/BLEPalletSensor.h"
 
 BLEPalletSensor::BLEPalletSensor()
