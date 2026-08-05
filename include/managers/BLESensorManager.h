@@ -1,6 +1,6 @@
 /**
- * @file BLESensorManager.cpp
- * @brief Plik implementacyjny zawierający definicje metod klasy BLESensorManager.
+ * @file BLESensorManager.h
+ * @brief Plik nagłówkowy zawierający deklaracje metod klasy BLESensorManager.
  */
 
 #pragma once

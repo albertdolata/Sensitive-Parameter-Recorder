@@ -1,6 +1,6 @@
 /**
  * @file BLESensorManager.cpp
- * @brief Plik implementacyjny zawierający definicje metod klasy BLESensorManager.
+ * @brief Plik źródłowy zawierający definicje metod klasy BLESensorManager.
  */
 
 #include "../include/managers/BLESensorManager.h"
