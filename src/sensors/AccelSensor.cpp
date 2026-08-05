@@ -1,3 +1,8 @@
+/**
+ * @file AccelSensor.cpp
+ * @brief Plik źródłowy zawierający definicje metod klasy AccelSensor
+ */
+
 #include "../include/sensors/AccelSensor.h"
 
 AccelSensor::AccelSensor(uint8_t addr)
