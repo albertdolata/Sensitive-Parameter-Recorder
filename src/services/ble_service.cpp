@@ -1,3 +1,8 @@
+/**
+ * @file ble_service.cpp
+ * @brief Plik źródłowy zawierający implementację funkcji i zadań FreeRTOS do obsługi skanowania BLE.
+ */
+
 #include "../include/services/ble_service.h"
 
 #include <BLEDevice.h>
