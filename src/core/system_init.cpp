@@ -1,3 +1,7 @@
+/**
+ * @file system_init.cpp
+ * @brief Implementacja funkcji inicjalizujących system sprzętowy (SPIFFS i SIMCom).
+ */
 #include "../include/core/system_init.h"
 #include "../include/simcom/sim7070_core.h"
 #include "SPIFFS.h"
