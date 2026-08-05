@@ -1,3 +1,8 @@
+/**
+ * @file TempHumSensor.cpp
+ * @brief Plik źródłowy zawierający implementację metod klasy TempHumSensor.
+ */
+
 #include "../include/sensors/TempHumSensor.h"
 
 TempHumSensor::TempHumSensor() : temperature(0.0), humidity(0.0) {}
