@@ -1,3 +1,8 @@
+/** 
+ * @file PresenceSensor.cpp
+ * @brief Plik źródłowy zawierający definicje metod klasy PresenceSensor.
+ */
+
 #include "../include/sensors/PresenceSensor.h"
 
 PresenceSensor::PresenceSensor(uint8_t pin)
