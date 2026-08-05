@@ -1,3 +1,11 @@
+/**
+ * @file main.cpp
+ * @brief Główny plik wejściowy oprogramowania dla urządzenia monitorującego naczepę.
+ * @details Zawiera logikę inicjalizacyjną (setup) konfigurującą magistrale (I2C, UART), 
+ * podział zadań na rdzenie (Dual-Core FreeRTOS) oraz główną pętlę (loop) cyklicznie 
+ * zbierającą odczyty ze wszystkich modułów i przesyłającą je na serwer MQTT.
+ */
+
 #include <Arduino.h>
 
 #include "../include/core/system_init.h"
@@ -20,17 +28,19 @@
 
 #define PRESENCE_SENSOR_PIN 14
 #define ACCEL_SENSOR_I2C_ADDR 0x18
+
 #define MAC_PALLETE_1 "d1:d2:e4:92:0e:c4"
 #define MAC_SECONDARY_CENTRAL "ca:37:e3:06:9b:84"
 
-volatile sensor_data_t centralData = {0};
-volatile uint8_t centralState = 0;
-volatile uint32_t sleepTimeStart = 0;
-volatile uint32_t btsWaitStart = 0;
-volatile uint32_t lastCpsiCheck = 0;
-volatile uint32_t gpsWaitStart = 0;
-volatile uint32_t bleLedTimer = 0;
-volatile uint32_t sendAttemptStart = 0;
+
+volatile sensor_data_t centralData = {0};   /**< Główny kontener na dane pomiarowe */
+volatile uint8_t centralState = 0;          /**< Aktualny stan maszyny stanów w pętli głównej */
+volatile uint32_t sleepTimeStart = 0;       /**< Znacznik czasu dla stanu uśpienia */
+volatile uint32_t btsWaitStart = 0;         /**< Znacznik czasu dla negocjacji z siecią GSM */
+volatile uint32_t lastCpsiCheck = 0;        /**< Zabezpieczenie przed spamowaniem komendą AT+CPSI */
+volatile uint32_t gpsWaitStart = 0;         /**< Timeout dla oczekiwania na pozycję GNSS */
+volatile uint32_t bleLedTimer = 0;          /**< Timer dla asynchronicznego mrugania diodą statusu BLE */
+volatile uint32_t sendAttemptStart = 0;     /**< Watchdog programowy dla procesu wysyłki MQTT */
 
 MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN,
                                               ACCEL_SENSOR_I2C_ADDR,
@@ -38,11 +48,17 @@ MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN,
                                               MAC_SECONDARY_CENTRAL);
 GPSManager GPS;
 
+/**
+ * @brief Funkcja pomocnicza przepisująca koordynaty z obiektu GPS do struktury wysyłkowej.
+ */
 void assignSimComDataToStruct(sensor_data_t* data, GPSManager* gps) {
     data->latitude = gps->getLatitude();
     data->longitude = gps->getLongitude();
 }
 
+/**
+ * @brief Inicjalizuje sprzęt, usługi pokładowe oraz przypisuje zadania FreeRTOS do rdzeni.
+ */
 void setup() {
     Serial.begin(115200);
     esp_log_level_set("*", ESP_LOG_ERROR);
@@ -68,6 +84,9 @@ void setup() {
                             0);
 }
 
+/**
+ * @brief Główna pętla aplikacyjna (Core 1) oparta na architekturze Maszyny Stanów (Non-blocking State Machine).
+ */
 void loop() {
     if (centralSensorManager.BleGotPackage()) {
         digitalWrite(LED_STATUS, HIGH);
