@@ -1,7 +1,7 @@
 /**
  * @file sim7070_core.h
  * @brief Driver niskopoziomowy dla modułu SIM7070 (GPRS/MQTT) dla ESP32.
- * * @details Zapewnia maszynę stanów do obsługi komend AT przez sprzętowy UART,
+ * @details Zapewnia maszynę stanów do obsługi komend AT przez sprzętowy UART,
  * zarządzanie zasilaniem (Power-On), autoryzację w sieci operatora oraz
  * zestawianie połączenia TCP/IP i tunelu MQTT.
  */

@@ -3,7 +3,7 @@
  * @brief Plik nagłówkowy zawierający funkcje inicjalizujące dla zarządzania
  * pamięcią SPIFFS oraz modemu SIMCom.
  *
- * Plik zawiera deklaracje funkcji SPIFFSinit() oraz SIMComInit()
+ * @details Plik zawiera deklaracje funkcji SPIFFSinit() oraz SIMComInit()
  * wykorzystywanych w pętli setup() programu.
  */
 
