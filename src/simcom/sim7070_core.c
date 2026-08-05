@@ -1,3 +1,11 @@
+/**
+ * @file sim7070_core.c
+ * @brief Implementacja sprzętowa obsługi modemu SIM7070 oraz parsera AT.
+ * * Plik ten zawiera główną logikę wielowątkową (FreeRTOS) obsługującą asynchroniczną 
+ * komunikację po UART. Implementuje wzorzec projektowy "Event Group" do flagowania
+ * odpowiedzi oraz sprzętowy mechanizm naprawczy (Watchdog) uodparniający system
+ * na błędy warstwy TCP/IP operatora.
+ */
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "../include/simcom/sim7070_core.h"
 
@@ -12,25 +20,48 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-#define SIM_UART_PORT UART_NUM_2
-#define BUF_SIZE 1024
+#define SIM_UART_PORT UART_NUM_2               /**< Port sprzętowy UART ESP32 używany do komunikacji z modemem */
+#define BUF_SIZE 1024                          /**< Rozmiar bufora kołowego dla danych przychodzących po UART */
 
-#define AT_BIT_OK BIT0
-#define AT_BIT_ERROR BIT1
-#define AT_BIT_PROMPT BIT2
+#define AT_BIT_OK BIT0                         /**< Flaga EventGroup: Otrzymano odpowiedź OK */
+#define AT_BIT_ERROR BIT1                      /**< Flaga EventGroup: Otrzymano błąd (ERROR) */
+#define AT_BIT_PROMPT BIT2                     /**< Flaga EventGroup: Otrzymano znak zachęty '>' (gotowość na payload) */
 
-#define MAX_CONSECUTIVE_FAILURES 3
+#define MAX_CONSECUTIVE_FAILURES 3             /**< Maksymalna liczba błędów sieci (IP/MQTT) przed twardym resetem sprzętowym */
 
-static SemaphoreHandle_t at_mutex = NULL;
-static QueueHandle_t uart_queue;
-static EventGroupHandle_t at_event_group;
-static char fsm_rx_buffer[BUF_SIZE];
-static volatile int fsm_rx_idx = 0;
-static const char* TAG = "SIM7070_GPRS";
-static gpio_num_t stored_rx_pin, stored_tx_pin, stored_pwr_pin;
-static int consecutive_failures = 0;
+static SemaphoreHandle_t at_mutex = NULL;      /**< Semafor chroniący port UART przed kolizją zapytań z wielu tasków */
+static QueueHandle_t uart_queue;               /**< Kolejka zdarzeń sprzętowych drivera UART */
+static EventGroupHandle_t at_event_group;      /**< Grupa zdarzeń (flagi) synchronizująca odpowiedzi modemu z głównym wątkiem */
+static char fsm_rx_buffer[BUF_SIZE];           /**< Podręczny bufor na surowe dane tekstowe przychodzące z modemu */
+static volatile int fsm_rx_idx = 0;            /**< Aktualny indeks zapisu w buforze odbiorczym fsm_rx_buffer */
+static const char* TAG = "SIM7070_GPRS";       /**< Tag systemowy dla logów diagnostycznych (ESP_LOG) */
+static gpio_num_t stored_rx_pin, stored_tx_pin, stored_pwr_pin; /**< Zapisane piny sprzętowe na potrzeby ewentualnego restartu */
+static int consecutive_failures = 0;           /**< Aktualny licznik błędów połączenia*/
 
+/**
+ * @brief Wewnętrzne zadanie (Task) FreeRTOS obsługujące zdarzenia portu UART w tle.
+ * * @details Pętla działająca w nieskończoność. Przechwytuje dane przychodzące z modemu, 
+ * parsuje standardowe odpowiedzi (OK, ERROR, >) i ustawia odpowiednie bity 
+ * w grupie zdarzeń (at_event_group). Wykrywa również komunikaty URC (Unsolicited Result Code).
+ * * @param pvParameters Parametry przekazane przy tworzeniu taska (nieużywane).
+ */
 static void sim7070_uart_event_task(void* pvParameters);
+
+/**
+ * @brief Wymusza sprzętowy restart modemu z powodu krytycznych błędów komunikacji.
+ * * @details Funkcja jest wywoływana automatycznie, gdy licznik consecutive_failures 
+ * przekroczy dopuszczalny próg (MAX_CONSECUTIVE_FAILURES). Symuluje fizyczne odcięcie
+ * zasilania poprzez manipulację pinem PWR, przywracając modem do ustawień fabrycznych
+ * po zawieszeniu stosu TCP/IP.
+ */
+static void sim7070_recover(void) {
+    ESP_LOGW(TAG,
+             "%d kolejnych bledow polaczenia - pelny restart modemu (jak "
+             "reczne odciecie)!",
+             MAX_CONSECUTIVE_FAILURES);
+    sim7070_init(stored_rx_pin, stored_tx_pin, stored_pwr_pin);
+    consecutive_failures = 0;
+}
 
 int send_at_cmd(const char* cmd, char* rx_buf, int rx_buf_len,
                 uint32_t timeout_ms) {
@@ -256,7 +287,7 @@ bool sim7070_mqtt_connect(void) {
         return false;
     }
 
-    send_at_cmd("AT+SMCONF=\"URL\",\"broker.hivemq.com\",1883\r\n", rx_buf,
+    send_at_cmd("AT+SMCONF=\"URL\",\"igel-kamil.ddns.net\",1883\r\n", rx_buf,
                 sizeof(rx_buf), 1000);
     send_at_cmd("AT+SMCONF=\"KEEPTIME\",60\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+SMCONF=\"CLEANSS\",1\r\n", rx_buf, sizeof(rx_buf), 500);
@@ -426,13 +457,4 @@ static void sim7070_uart_event_task(void* pvParameters) {
     }
     free(dtmp);
     vTaskDelete(NULL);
-}
-
-static void sim7070_recover(void) {
-    ESP_LOGW(TAG,
-             "%d kolejnych bledow polaczenia - pelny restart modemu (jak "
-             "reczne odciecie)!",
-             MAX_CONSECUTIVE_FAILURES);
-    sim7070_init(stored_rx_pin, stored_tx_pin, stored_pwr_pin);
-    consecutive_failures = 0;
 }
