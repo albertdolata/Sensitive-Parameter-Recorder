@@ -1,3 +1,8 @@
+/**
+ * @file MainCentralSensorManager.cpp
+ * @brief Plik źródłowy zawierający definicje metod klasy MainCentralSensorManager.
+ */
+
 #include "../include/managers/MainCentralSensorManager.h"
 
 MainCentralSensorManager::MainCentralSensorManager(
