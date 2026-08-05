@@ -1,3 +1,8 @@
+/**
+ * @file BLESensorManager.cpp
+ * @brief Plik implementacyjny zawierający definicje metod klasy BLESensorManager.
+ */
+
 #include "../include/managers/BLESensorManager.h"
 
 BLESensorManager::BLESensorManager(BLEPalletSensor* palletSensor1,
