@@ -1,3 +1,8 @@
+/**
+ * @file BLESecondaryCentral.cpp
+ * @brief Plik źródłowy zawierający definicje metod klasy BLESecondaryCentral.
+ */
+
 #include "../include/sensors/BLESecondaryCentral.h"
 
 BLESecondaryCentral::BLESecondaryCentral()
