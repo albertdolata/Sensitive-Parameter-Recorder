@@ -1,3 +1,8 @@
+/**
+ * @file GPSManager.cpp
+ * @brief Plik źródłowy zawierający definicje metod klasy GPSManager.
+ */
+
 #include "../include/managers/GPSManager.h"
 
 void GPSManager::parseTime(String rawTime) {
