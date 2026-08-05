@@ -1,3 +1,8 @@
+/**
+ * @file data_send_service.cpp
+ * @brief Plik źródłowy implementujący logikę wysyłania i archiwizacji danych (SPIFFS).
+ */
+
 #include "../include/simcom/data_send_service.h"
 
 #include <string.h>
@@ -9,14 +14,36 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
+/** 
+ * @brief Maksymalna dopuszczalna liczba rekordów w pliku offline. 
+ * @details Zabezpiecza pamięć Flash (SPIFFS) przed całkowitym zapełnieniem. 
+ * Przy średnim rozmiarze struktury zapobiega to uszkodzeniu systemu plików.
+ */
 #define MAX_BACKLOG_RECORDS 45000
+
+/** 
+ * @brief Liczba rekordów pozostawiana po wykonaniu operacji przycinania (Trim).
+ * @details Tworzy tzw. histerezę (margines 5000 rekordów), aby unikać 
+ * obciążającego rotowania pliku z każdym kolejnym nowym pomiarem.
+ */
 #define TRIM_TO_RECORDS 40000
 
-static const char* TAG = "DATA_SERVICE";
-static QueueHandle_t data_queue = NULL;
-static volatile bool is_sending = false;
-static SemaphoreHandle_t spiffs_mutex = NULL;
+static const char* TAG = "DATA_SERVICE"; /**< Tag identyfikacyjny dla logów systemowych (ESP_LOG) */
+static QueueHandle_t data_queue = NULL; /**< Uchwyt do głównej kolejki FreeRTOS buforującej paczki z czujników */
+static volatile bool is_sending = false; /**< Flaga stanu wysyłki (volatile zapobiega nadmiernej optymalizacji przez kompilator) */
+static SemaphoreHandle_t spiffs_mutex = NULL; /**< Semefor (Mutex) chroniący współdzielony dostęp do pamięci SPIFFS przed wyścigami wątków */
 
+
+/**
+ * @brief Zadanie FreeRTOS obsługujące ekstrakcję danych z kolejki i komunikację MQTT.
+ * 
+ * @details Działa w nieskończonej pętli. Funkcja wybudza się, gdy w kolejce pojawią się 
+ * nowe dane. Formatuje strukturę C do postaci obiektu JSON, a następnie wysyła go 
+ * za pomocą sprzętowego modemu. Jeśli negocjacja sieci zawiedzie, przerzuca odpowiedzialność 
+ * na system plików SPIFFS.
+ * 
+ * @param[in] pvParameters Wskaźnik do parametrów zadania (nieużywany).
+ */
 static void data_sender_task(void* pvParameters) {
     sensor_data_t incoming_data;
     char json_buffer[768];
@@ -140,6 +167,15 @@ bool data_service_is_busy(void) {
     return uxQueueMessagesWaiting(data_queue) > 0;
 }
 
+/**
+ * @brief Chroni system plików przed przepełnieniem (Rotacja logów).
+ * 
+ * @details Mechanizm weryfikuje wielkość pliku "/data_backup.dat". Jeśli liczba zapisanych 
+ * rekordów przekroczy zdefiniowany limit (MAX_BACKLOG_RECORDS), plik jest przycinany.
+ * Funkcja usuwa najstarsze pomiary i zachowuje najnowsze (TRIM_TO_RECORDS). Dodatkowo 
+ * implementuje warstwę autonaprawy w przypadku wykrycia uciętej/niepełnej struktury 
+ * binarnej na skutek zaniku zasilania w trakcie zapisu na flash.
+ */
 static void trimBacklogIfNeeded() {
     if (!SPIFFS.exists("/data_backup.dat")) return;
 
