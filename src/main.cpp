@@ -41,6 +41,7 @@ volatile uint32_t lastCpsiCheck = 0;        /**< Zabezpieczenie przed spamowanie
 volatile uint32_t gpsWaitStart = 0;         /**< Timeout dla oczekiwania na pozycję GNSS */
 volatile uint32_t bleLedTimer = 0;          /**< Timer dla asynchronicznego mrugania diodą statusu BLE */
 volatile uint32_t sendAttemptStart = 0;     /**< Watchdog programowy dla procesu wysyłki MQTT */
+volatile uint32_t lastTimeSync = 0;         /**< Znacznik czasu ostatniej synchronizacji czasu systemowego z GNSS */
 
 MainCentralSensorManager centralSensorManager(PRESENCE_SENSOR_PIN,
                                               ACCEL_SENSOR_I2C_ADDR,
@@ -104,7 +105,10 @@ void loop() {
                 gpsWaitStart = millis();
             }
             if (GPS.hasFix()) {
-                setESP32Time(GPS.getTimestamp());
+                if (lastTimeSync == 0 || (time(NULL) - lastTimeSync > 3600)) {
+                    setESP32Time(GPS.getTimestamp());
+                    lastTimeSync = time(NULL);
+                }
                 GPS.pause();
                 btsWaitStart = millis();
                 centralState = 1;
