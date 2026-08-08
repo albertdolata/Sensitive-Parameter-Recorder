@@ -270,7 +270,17 @@ bool sendBackupData() {
         int dataNotSend = 0;
         bool networkFailed = false;
 
+        const int MAX_BATCH_SIZE = 20; 
+        int currentBatchCount = 0;
+
         while (dataFile.read((uint8_t*)&offlineData, sizeof(sensor_data_t)) == sizeof(sensor_data_t)) {
+            if (currentBatchCount >= MAX_BATCH_SIZE) {
+                dataNotSend++;
+                tempFile.write((uint8_t*)&offlineData, sizeof(sensor_data_t));
+                continue; 
+            }
+
+            
             if (!networkFailed) {
                 snprintf(
                     json_buffer, sizeof(json_buffer),
@@ -293,6 +303,7 @@ bool sendBackupData() {
 
                 if (sim7070_mqtt_send("dom/czujnik1", json_buffer)) {
                     dataSent++;
+                    currentBatchCount++;
                 } else {
                     networkFailed = true;
                     dataNotSend++;
