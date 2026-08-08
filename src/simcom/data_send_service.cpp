@@ -92,7 +92,8 @@ static void data_sender_task(void* pvParameters) {
                 "},"
                 "\"location\":{"
                 "\"latg\":%.6f,"
-                "\"long\":%.6f"
+                "\"long\":%.6f,"
+                "\"GPS_valid\":%s"
                 "},"
                 "\"p1\":{"
                 "\"p1x\":%.2f,"
@@ -117,7 +118,7 @@ static void data_sender_task(void* pvParameters) {
                 incoming_data.temperature_secondary_central,
                 incoming_data.humidity_secondary_central,
                 incoming_data.is_closed_secondary_central ? "true" : "false",
-                incoming_data.latitude, incoming_data.longitude,
+                incoming_data.latitude, incoming_data.longitude, incoming_data.GPS_valid ? "true" : "false",
                 incoming_data.accelx_palette1, incoming_data.accely_palette1,
                 incoming_data.accelz_palette1,
                 incoming_data.motion_detected_p1 ? "true" : "false",

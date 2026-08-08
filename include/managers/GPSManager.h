@@ -22,6 +22,7 @@ class GPSManager {
     uint32_t timestamp; /**< Znacznik czasu UTC w formacie UNIX Epoch (sekundy od 1970) */
     bool isON;          /**< Flaga stanu zasilania silnika GNSS (odpowiednik AT+CGNSPWR) */
     bool fixStatus;     /**< Flaga statusu nawigacji (1 = namierzono satelity, 0 = szukanie) */
+    bool GPS_valid;      /**< Flaga określająca, czy dane GNSS są aktualne i poprawne */
 
     /** 
      * @brief Parsuje surowy ciąg czasu GNSS na format UNIX timestamp.
@@ -111,4 +112,10 @@ class GPSManager {
      * @return true jeśli antena GNSS jest aktualnie zasilona.
      */
     bool isPowered();
+
+    /** 
+     * @brief Sprawdza, czy dane GNSS są aktualne i poprawne.
+     * @return true jeśli dane GNSS są aktualne i poprawne, false w przeciwnym razie.
+     */
+    bool isGPSValid();
 };

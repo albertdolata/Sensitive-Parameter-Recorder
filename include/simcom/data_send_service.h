@@ -42,6 +42,7 @@ typedef struct {
     // --- Dane lokalizacyjne i sieciowe (GNSS / LBS) ---
     double latitude;        /**< Szerokość geograficzna ze sprzętowego odbiornika GNSS */
     double longitude;       /**< Długość geograficzna ze sprzętowego odbiornika GNSS */
+    bool GPS_valid;        /**< Flaga określająca, czy dane GNSS są aktualne i poprawne */
     cell_info_t cell_info;  /**< Metadane stacji bazowej GSM (MNC, MCC, TAC, CID) do weryfikacji LBS */
     
     // --- Dane ze zdalnych czujników na paletach (BLE) ---

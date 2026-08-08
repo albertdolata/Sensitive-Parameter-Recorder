@@ -42,9 +42,11 @@ void GPSManager::parseResponse(String response) {
 
             latitude = rawLatitdue.toDouble();
             longitude = rawLongitude.toDouble();
+            GPS_valid = true;
             parseTime(rawTime);
         } else {
             fixStatus = false;
+            GPS_valid = false;
         }
     }
 }
@@ -75,11 +77,13 @@ void GPSManager::pause() {
     send_at_cmd("AT+CGNSPWR=0\r\n", rx_buff, sizeof(rx_buff), 2000);
     isON = false;
     fixStatus = false;
+    GPS_valid = false;
 }
 
 void GPSManager::resume() {
     if (isON) return;
     fixStatus = false;
+    GPS_valid = false;
     timestamp = 0;
     char rx_buff[128];
     send_at_cmd("AT+CGNSPWR=1\r\n", rx_buff, sizeof(rx_buff), 2000);
@@ -104,4 +108,8 @@ bool GPSManager::hasFix() {
 
 bool GPSManager::isPowered() {
     return isON;
+}
+
+bool GPSManager::isGPSValid() {
+    return GPS_valid;
 }

@@ -55,6 +55,7 @@ GPSManager GPS;
 void assignSimComDataToStruct(sensor_data_t* data, GPSManager* gps) {
     data->latitude = gps->getLatitude();
     data->longitude = gps->getLongitude();
+    data->GPS_valid = gps->isGPSValid();
 }
 
 /**
