@@ -288,7 +288,7 @@ bool sendBackupData() {
                     "{\"mcent\":{\"temp\":%.2f,\"hum\":%.2f,\"accelx\":%.2f,"
                     "\"accely\":%.2f,\"accelz\":%.2f,\"presence\":%s,\"time\":%lu},"
                     "\"scent\":{\"temp\":%.2f,\"hum\":%.2f,\"is_closed\":%s},"
-                    "\"location\":{\"latg\":%.6f,\"long\":%.6f},"
+                    "\"location\":{\"latg\":%.6f,\"long\":%.6f,\"GPS_valid\":%s},"
                     "\"p1\":{\"p1x\":%.2f,\"p1y\":%.2f,\"p1z\":%.2f,\"p1mot\":%s},"
                     "\"cell\":{\"mcc\":%u,\"mnc\":%u,\"tac\":%lu,\"cid\":%lu}}",
                     offlineData.temperature_main_central, offlineData.humidity_main_central,
@@ -296,7 +296,8 @@ bool sendBackupData() {
                     offlineData.presence_main_central ? "true" : "false", (unsigned long)offlineData.timestamp,
                     offlineData.temperature_secondary_central, offlineData.humidity_secondary_central,
                     offlineData.is_closed_secondary_central ? "true" : "false",
-                    offlineData.latitude, offlineData.longitude,
+                    offlineData.latitude, offlineData.longitude, 
+                    offlineData.GPS_valid ? "true" : "false",
                     offlineData.accelx_palette1, offlineData.accely_palette1, offlineData.accelz_palette1,
                     offlineData.motion_detected_p1 ? "true" : "false",
                     offlineData.cell_info.mcc, offlineData.cell_info.mnc,

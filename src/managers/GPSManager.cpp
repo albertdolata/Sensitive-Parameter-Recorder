@@ -52,7 +52,7 @@ void GPSManager::parseResponse(String response) {
 }
 
 GPSManager::GPSManager()
-    : latitude(0.0), longitude(0.0), isON(false), fixStatus(false) {}
+    : latitude(0.0), longitude(0.0), timestamp(0), isON(false), fixStatus(false), GPS_valid(false) {}
 
 void GPSManager::begin() {
     char rx_buff[128];
@@ -76,8 +76,6 @@ void GPSManager::pause() {
     char rx_buff[128];
     send_at_cmd("AT+CGNSPWR=0\r\n", rx_buff, sizeof(rx_buff), 2000);
     isON = false;
-    fixStatus = false;
-    GPS_valid = false;
 }
 
 void GPSManager::resume() {
