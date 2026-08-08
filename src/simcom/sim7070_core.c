@@ -287,7 +287,7 @@ bool sim7070_mqtt_connect(void) {
         return false;
     }
 
-    send_at_cmd("AT+SMCONF=\"URL\",\"igel-kamil.ddns.net\",1883\r\n", rx_buf,
+    send_at_cmd("AT+SMCONF=\"URL\",\"broker.hivemq.com\",1883\r\n", rx_buf,
                 sizeof(rx_buf), 1000);
     send_at_cmd("AT+SMCONF=\"KEEPTIME\",60\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+SMCONF=\"CLEANSS\",1\r\n", rx_buf, sizeof(rx_buf), 500);
