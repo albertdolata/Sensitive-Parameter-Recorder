@@ -140,11 +140,11 @@ void loop() {
         case 2:
             centralSensorManager.readAllSensorsData();
             centralSensorManager.fillSensorData((sensor_data_t*)&centralData);
+            assignSimComDataToStruct((sensor_data_t*)&centralData, &GPS);
             centralData.timestamp = time(NULL);
             centralState = 3;
             break;
         case 3:
-            assignSimComDataToStruct((sensor_data_t*)&centralData, &GPS);
             digitalWrite(LED_USER, HIGH);
             data_service_push((sensor_data_t*)&centralData);
             sendAttemptStart = millis();

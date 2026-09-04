@@ -1,10 +1,10 @@
 /**
  * @file sim7070_core.c
  * @brief Implementacja sprzętowa obsługi modemu SIM7070 oraz parsera AT.
- * * Plik ten zawiera główną logikę wielowątkową (FreeRTOS) obsługującą asynchroniczną 
- * komunikację po UART. Implementuje wzorzec projektowy "Event Group" do flagowania
- * odpowiedzi oraz sprzętowy mechanizm naprawczy (Watchdog) uodparniający system
- * na błędy warstwy TCP/IP operatora.
+ * * Plik ten zawiera główną logikę wielowątkową (FreeRTOS) obsługującą
+ * asynchroniczną komunikację po UART. Implementuje wzorzec projektowy "Event
+ * Group" do flagowania odpowiedzi oraz sprzętowy mechanizm naprawczy (Watchdog)
+ * uodparniający system na błędy warstwy TCP/IP operatora.
  */
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "../include/simcom/sim7070_core.h"
@@ -20,39 +20,58 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-#define SIM_UART_PORT UART_NUM_2               /**< Port sprzętowy UART ESP32 używany do komunikacji z modemem */
-#define BUF_SIZE 1024                          /**< Rozmiar bufora kołowego dla danych przychodzących po UART */
+#define SIM_UART_PORT                                                            \
+    UART_NUM_2 /**< Port sprzętowy UART ESP32 używany do komunikacji z modemem \
+                */
+#define BUF_SIZE \
+    1024 /**< Rozmiar bufora kołowego dla danych przychodzących po UART */
 
-#define AT_BIT_OK BIT0                         /**< Flaga EventGroup: Otrzymano odpowiedź OK */
-#define AT_BIT_ERROR BIT1                      /**< Flaga EventGroup: Otrzymano błąd (ERROR) */
-#define AT_BIT_PROMPT BIT2                     /**< Flaga EventGroup: Otrzymano znak zachęty '>' (gotowość na payload) */
+#define AT_BIT_OK BIT0    /**< Flaga EventGroup: Otrzymano odpowiedź OK */
+#define AT_BIT_ERROR BIT1 /**< Flaga EventGroup: Otrzymano błąd (ERROR) */
+#define AT_BIT_PROMPT                                                      \
+    BIT2 /**< Flaga EventGroup: Otrzymano znak zachęty '>' (gotowość na \
+            payload) */
 
-#define MAX_CONSECUTIVE_FAILURES 3             /**< Maksymalna liczba błędów sieci (IP/MQTT) przed twardym resetem sprzętowym */
+#define MAX_CONSECUTIVE_FAILURES                                             \
+    3 /**< Maksymalna liczba błędów sieci (IP/MQTT) przed twardym resetem \
+         sprzętowym */
 
-static SemaphoreHandle_t at_mutex = NULL;      /**< Semafor chroniący port UART przed kolizją zapytań z wielu tasków */
-static QueueHandle_t uart_queue;               /**< Kolejka zdarzeń sprzętowych drivera UART */
-static EventGroupHandle_t at_event_group;      /**< Grupa zdarzeń (flagi) synchronizująca odpowiedzi modemu z głównym wątkiem */
-static char fsm_rx_buffer[BUF_SIZE];           /**< Podręczny bufor na surowe dane tekstowe przychodzące z modemu */
-static volatile int fsm_rx_idx = 0;            /**< Aktualny indeks zapisu w buforze odbiorczym fsm_rx_buffer */
-static const char* TAG = "SIM7070_GPRS";       /**< Tag systemowy dla logów diagnostycznych (ESP_LOG) */
-static gpio_num_t stored_rx_pin, stored_tx_pin, stored_pwr_pin; /**< Zapisane piny sprzętowe na potrzeby ewentualnego restartu */
-static int consecutive_failures = 0;           /**< Aktualny licznik błędów połączenia*/
+static SemaphoreHandle_t at_mutex = NULL; /**< Semafor chroniący port UART przed
+                                             kolizją zapytań z wielu tasków */
+static QueueHandle_t
+    uart_queue; /**< Kolejka zdarzeń sprzętowych drivera UART */
+static EventGroupHandle_t
+    at_event_group; /**< Grupa zdarzeń (flagi) synchronizująca odpowiedzi modemu
+                       z głównym wątkiem */
+static char fsm_rx_buffer[BUF_SIZE]; /**< Podręczny bufor na surowe dane
+                                        tekstowe przychodzące z modemu */
+static volatile int fsm_rx_idx =
+    0; /**< Aktualny indeks zapisu w buforze odbiorczym fsm_rx_buffer */
+static const char* TAG =
+    "SIM7070_GPRS"; /**< Tag systemowy dla logów diagnostycznych (ESP_LOG) */
+static gpio_num_t stored_rx_pin, stored_tx_pin,
+    stored_pwr_pin; /**< Zapisane piny sprzętowe na potrzeby ewentualnego
+                       restartu */
+static int consecutive_failures = 0; /**< Aktualny licznik błędów połączenia*/
 
 /**
- * @brief Wewnętrzne zadanie (Task) FreeRTOS obsługujące zdarzenia portu UART w tle.
- * * @details Pętla działająca w nieskończoność. Przechwytuje dane przychodzące z modemu, 
- * parsuje standardowe odpowiedzi (OK, ERROR, >) i ustawia odpowiednie bity 
- * w grupie zdarzeń (at_event_group). Wykrywa również komunikaty URC (Unsolicited Result Code).
+ * @brief Wewnętrzne zadanie (Task) FreeRTOS obsługujące zdarzenia portu UART w
+ * tle.
+ * * @details Pętla działająca w nieskończoność. Przechwytuje dane przychodzące
+ * z modemu, parsuje standardowe odpowiedzi (OK, ERROR, >) i ustawia odpowiednie
+ * bity w grupie zdarzeń (at_event_group). Wykrywa również komunikaty URC
+ * (Unsolicited Result Code).
  * * @param pvParameters Parametry przekazane przy tworzeniu taska (nieużywane).
  */
 static void sim7070_uart_event_task(void* pvParameters);
 
 /**
- * @brief Wymusza sprzętowy restart modemu z powodu krytycznych błędów komunikacji.
- * * @details Funkcja jest wywoływana automatycznie, gdy licznik consecutive_failures 
- * przekroczy dopuszczalny próg (MAX_CONSECUTIVE_FAILURES). Symuluje fizyczne odcięcie
- * zasilania poprzez manipulację pinem PWR, przywracając modem do ustawień fabrycznych
- * po zawieszeniu stosu TCP/IP.
+ * @brief Wymusza sprzętowy restart modemu z powodu krytycznych błędów
+ * komunikacji.
+ * * @details Funkcja jest wywoływana automatycznie, gdy licznik
+ * consecutive_failures przekroczy dopuszczalny próg (MAX_CONSECUTIVE_FAILURES).
+ * Symuluje fizyczne odcięcie zasilania poprzez manipulację pinem PWR,
+ * przywracając modem do ustawień fabrycznych po zawieszeniu stosu TCP/IP.
  */
 static void sim7070_recover(void) {
     ESP_LOGW(TAG,
@@ -287,27 +306,69 @@ bool sim7070_mqtt_connect(void) {
         return false;
     }
 
-    send_at_cmd("AT+SMCONF=\"URL\",\"broker.hivemq.com\",1883\r\n", rx_buf,
+    send_at_cmd(
+        "AT+SMCONF=\"URL\",\"618ed5c937b64225ae070ae7c80b0c4a.s1.eu.hivemq."
+        "cloud\",8883\r\n",
+        rx_buf, sizeof(rx_buf), 1000);
+    send_at_cmd("AT+SMCONF=\"USERNAME\",\"truck1\"\r\n", rx_buf, sizeof(rx_buf),
+                1000);
+    send_at_cmd("AT+SMCONF=\"PASSWORD\",\"truck1234567890\"\r\n", rx_buf,
                 sizeof(rx_buf), 1000);
     send_at_cmd("AT+SMCONF=\"KEEPTIME\",60\r\n", rx_buf, sizeof(rx_buf), 500);
     send_at_cmd("AT+SMCONF=\"CLEANSS\",1\r\n", rx_buf, sizeof(rx_buf), 500);
-    send_at_cmd("AT+SMCONF=\"CLIENTID\",\"esp32_p_komp\"\r\n", rx_buf,
+    send_at_cmd("AT+SMCONF=\"CLIENTID\",\"truck_esp32_01\"\r\n", rx_buf,
                 sizeof(rx_buf), 1000);
+    send_at_cmd("AT+CSSLCFG=\"sslversion\",0,3\r\n", rx_buf, sizeof(rx_buf),
+                1000);
+    send_at_cmd(
+        "AT+CSSLCFG=\"sni\",0,\"618ed5c937b64225ae070ae7c80b0c4a.s1.eu.hivemq."
+        "cloud\"\r\n",
+        rx_buf, sizeof(rx_buf), 1000);
+
+    ESP_LOGI(TAG, "Szukanie poprawnej składni komendy AT+SMSSL...");
+    const char* ssl_tests[] = {
+        "AT+SMSSL=1,\"\",\"\"\r\n",
+        "AT+SMSSL=1,0,0\r\n",
+        "AT+SMSSL=1,0\r\n",
+        "AT+SMSSL=1,1\r\n",
+        "AT+SMSSL=1\r\n",
+        "AT+SMSSL=1,\"0\"\r\n"
+    };
+
+    bool ssl_ok = false;
+    for (int i = 0; i < 6; i++) {
+        memset(rx_buf, 0, sizeof(rx_buf));
+        if (send_at_cmd(ssl_tests[i], rx_buf, sizeof(rx_buf), 1000) > 0) {
+            ESP_LOGI(TAG, "SUKCES: Modem zaakceptował komendę -> %s",
+                     ssl_tests[i]);
+            ssl_ok = true;
+            break;
+        }
+    }
+
+    if (!ssl_ok) {
+        ESP_LOGE(
+            TAG,
+            "FATAL ERROR: Modem odrzucił wszystkie wariacje komendy AT+SMSSL!");
+        consecutive_failures++;
+        if (consecutive_failures >= MAX_CONSECUTIVE_FAILURES) sim7070_recover();
+        return false;
+    }
 
     ESP_LOGI(TAG, "Zestawianie tunelu TCP (MQTT)...");
-    if (send_at_cmd("AT+SMCONN\r\n", rx_buf, sizeof(rx_buf), 20000) > 0 &&
-        strstr(rx_buf, "OK")) {
-        ESP_LOGI(TAG, "SUKCES! Połączono z brokerem.");
+    memset(rx_buf, 0, sizeof(rx_buf)); 
+    int conn_result = send_at_cmd("AT+SMCONN\r\n", rx_buf, sizeof(rx_buf), 30000);
+    
+    if (conn_result > 0) {
+        ESP_LOGI(TAG, "SUKCES! Połączono bezpiecznie z HiveMQ Cloud.");
         consecutive_failures = 0;
         return true;
+    } else {
+        ESP_LOGE(TAG, "Błąd nawiązywania połączenia MQTT (AT+SMCONN). Odpowiedź modemu: %s", rx_buf);
+        consecutive_failures++;
+        if (consecutive_failures >= MAX_CONSECUTIVE_FAILURES) sim7070_recover();
+        return false;
     }
-
-    ESP_LOGE(TAG, "Blad polaczenia z brokerem MQTT.");
-    consecutive_failures++;
-    if (consecutive_failures >= MAX_CONSECUTIVE_FAILURES) {
-        sim7070_recover();
-    }
-    return false;
 }
 
 void sim7070_mqtt_disconnect(void) {
@@ -335,9 +396,8 @@ bool sim7070_mqtt_send(const char* topic, const char* payload) {
         vTaskDelay(pdMS_TO_TICKS(100));
         uart_write_bytes(SIM_UART_PORT, payload, strlen(payload));
 
-        bits = xEventGroupWaitBits(
-            at_event_group, AT_BIT_OK | AT_BIT_ERROR, pdFALSE, pdFALSE,
-            pdMS_TO_TICKS(15000));  // GPRS może mieć wyższe opóźnienia
+        bits = xEventGroupWaitBits(at_event_group, AT_BIT_OK | AT_BIT_ERROR,
+                                   pdFALSE, pdFALSE, pdMS_TO_TICKS(15000));
 
         if (bits & AT_BIT_OK) {
             if (at_mutex != NULL) xSemaphoreGive(at_mutex);
